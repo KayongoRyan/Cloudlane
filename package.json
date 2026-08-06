@@ -1,0 +1,24 @@
+{
+  "name": "cloudlane",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Multi-tenant cloud platform with Cloud Run-style deploy experience",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:dashboard\"",
+    "dev:api": "npm run dev --workspace=@cloudlane/api",
+    "dev:dashboard": "npm run dev --workspace=@cloudlane/dashboard",
+    "build": "npm run build --workspaces",
+    "test": "npm run test --workspaces",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "concurrently": "^8.2.2",
+    "eslint": "^8.55.0",
+    "typescript": "^5.3.0"
+  }
+}
