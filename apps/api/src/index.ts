@@ -21,6 +21,11 @@ app.use((req, res, next) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/deployments', deploymentRoutes);
 
+// Root
+app.get('/', (_req, res) => {
+  res.json({ message: 'Cloudlane API is running. See /api for endpoints.' });
+});
+
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
