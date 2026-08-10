@@ -1,5 +1,5 @@
-import { Router } from 'express';
-import jwt from 'jsonwebtoken';
+﻿import { Router } from 'express';
+import * as jwt from 'jsonwebtoken';
 import config from '../config';
 import { User } from '../models';
 
@@ -17,16 +17,17 @@ router.post('/login', async (req, res) => {
         return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    const secret = config.jwtSecret as unknown as jwt.Secret;
+    const signOptions = { expiresIn: config.jwtExpiresIn } as jwt.SignOptions;
+
     const token = jwt.sign(
         {
             userId: user._id.toString(),
             tenantId: user.tenantId,
             role: user.role,
         },
-        config.jwtSecret as string,
-        {
-            expiresIn: config.jwtExpiresIn,
-        }
+        secret,
+        signOptions
     );
 
     return res.json({ token });
