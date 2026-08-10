@@ -9,7 +9,7 @@ class KubernetesService {
 
   constructor() {
     this.kubeConfig = new KubeConfig();
-    
+
     if (config.kubernetesConfigPath) {
       this.kubeConfig.loadFromFile(config.kubernetesConfigPath);
     } else {
@@ -236,7 +236,12 @@ class KubernetesService {
         pod.metadata!.name!,
         namespace,
         undefined,
-        false,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
         tailLines || 100
       );
       logs += `[${pod.metadata!.name}]\n${podLogs.body}\n`;
