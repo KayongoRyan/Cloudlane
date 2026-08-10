@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import config from '../config';
 import { User } from '../models';
 
-export interface AuthRequest extends Request {
+export interface AuthRequest extends Request<Record<string, any>, any, any> {
   userId?: string;
   tenantId?: string;
   userRole?: string;
@@ -75,7 +75,7 @@ export async function authenticateApiKey(
     const keyHash = hashApiKey(apiKey);
     const prefix = apiKey.substring(0, 8);
 
-    const apiKeyRecord = await import('../models').then(m => 
+    const apiKeyRecord = await import('../models').then(m =>
       m.ApiKey.findOne({ prefix, keyHash }).populate('tenantId')
     );
 
@@ -85,7 +85,7 @@ export async function authenticateApiKey(
     }
 
     // Update last used timestamp
-    await import('../models').then(m => 
+    await import('../models').then(m =>
       m.ApiKey.updateOne({ _id: apiKeyRecord._id }, { lastUsedAt: new Date() })
     );
 

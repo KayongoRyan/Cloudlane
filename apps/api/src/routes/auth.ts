@@ -23,7 +23,7 @@ router.post('/login', async (req, res) => {
             tenantId: user.tenantId,
             role: user.role,
         },
-        config.jwtSecret,
+        config.jwtSecret as string,
         {
             expiresIn: config.jwtExpiresIn,
         }

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, Response } from 'express';
 import { AuthRequest, authenticateJWT } from '../middleware/auth';
 import { Deployment } from '../models';
 import kubernetesService from '../services/kubernetes';
@@ -7,7 +7,7 @@ const router = Router();
 
 router.use(authenticateJWT);
 
-router.get('/', async (req: AuthRequest, res) => {
+router.get('/', async (req: AuthRequest, res: Response) => {
     const tenantId = req.tenantId;
 
     if (!tenantId) {
@@ -18,9 +18,13 @@ router.get('/', async (req: AuthRequest, res) => {
     return res.json({ deployments });
 });
 
-router.post('/', async (req: AuthRequest, res) => {
+router.post('/', async (req: AuthRequest, res: Response) => {
     const tenantId = req.tenantId;
-    const { name, image, port } = req.body;
+    const { name, image, port } = req.body as {
+        name?: string;
+        image?: string;
+        port?: number;
+    };
 
     if (!tenantId) {
         return res.status(401).json({ error: 'Unauthorized' });
@@ -30,7 +34,8 @@ router.post('/', async (req: AuthRequest, res) => {
         return res.status(400).json({ error: 'Name, image, and port are required' });
     }
 
-    const subdomain = `${name.replace(/[^a-z0-9-]/gi, '').toLowerCase()}-${Math.random().toString(36).slice(2, 8)}`;
+    const sanitizedName = name.replace(/[^a-z0-9-]/gi, '').toLowerCase();
+    const subdomain = `${sanitizedName}-${Math.random().toString(36).slice(2, 8)}`;
     const deploymentNamespace = `tenant-${tenantId}`;
     const deploymentName = name.replace(/\s+/g, '-').toLowerCase();
 
@@ -68,6 +73,16 @@ router.post('/', async (req: AuthRequest, res) => {
             subdomain,
             port
         );
-    });
+
+        deployment.status = 'running';
+        await deployment.save();
+
+        return res.status(201).json({ deployment });
+    } catch (error: any) {
+        deployment.status = 'failed';
+        await deployment.save();
+        return res.status(500).json({ error: error.message || 'Failed to deploy' });
+    }
+});
 
 export default router;
