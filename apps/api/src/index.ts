@@ -44,14 +44,17 @@ async function startServer() {
     await mongoose.connect(config.mongoUri);
     console.log('Connected to MongoDB');
 
-    app.listen(config.port, () => {
-      console.log(`Cloudlane API running on port ${config.port}`);
-      console.log(`Environment: ${config.environment}`);
-    });
   } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
+    console.error('Failed to connect to MongoDB:', error);
+    // Do not exit process here; allow the server to start so serverless platforms
+    // (like Vercel) don't treat this as a function crash. Routes that depend on
+    // the database should handle missing DB connections gracefully.
   }
+
+  app.listen(config.port, () => {
+    console.log(`Cloudlane API running on port ${config.port}`);
+    console.log(`Environment: ${config.environment}`);
+  });
 }
 
 startServer();
