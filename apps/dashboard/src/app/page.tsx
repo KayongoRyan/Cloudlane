@@ -34,71 +34,69 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-lg shadow">
-        <div>
-          <h1 className="text-3xl font-bold text-center text-gray-900">
-            Cloudlane
-          </h1>
-          <p className="mt-2 text-center text-gray-600">
-            Deploy containers, get live URLs
+    <main className="auth-page">
+      <section className="auth-panel">
+        <div className="auth-copy">
+          <span className="brand-badge">Cloudlane</span>
+          <h1>Deploy faster with a calm, modern control plane.</h1>
+          <p>
+            Ship new versions in minutes with a polished workspace for managing
+            containers, domains, and release health from one view.
           </p>
+          <ul className="auth-list">
+            <li>⚡ One-click deployment flow</li>
+            <li>🌐 Live URLs for every app</li>
+            <li>📈 Clear operational visibility</li>
+          </ul>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-              {error}
+        <div className="auth-card">
+          <div className="card-header">
+            <h2>Welcome back</h2>
+            <p>Sign in to your workspace</p>
+          </div>
+
+          <form className="auth-form" onSubmit={handleSubmit}>
+            {error && <div className="error-banner">{error}</div>}
+
+            <div className="form-field">
+              <label htmlFor="email">Email</label>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@company.com"
+              />
             </div>
-          )}
 
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-              Email
-            </label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
+            <div className="form-field">
+              <label htmlFor="password">Password</label>
+              <input
+                id="password"
+                name="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+              />
+            </div>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              Password
-            </label>
-            <input
-              id="password"
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
+            <button type="submit" className="button-primary">
+              Sign in
+            </button>
+          </form>
 
-          <button
-            type="submit"
-            className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            Sign in
-          </button>
-        </form>
-
-        <p className="text-center text-sm text-gray-600">
-          Don't have an account?{' '}
-          <a href="/signup" className="text-blue-600 hover:text-blue-500">
-            Sign up
-          </a>
-        </p>
-      </div>
-    </div>
+          <p className="auth-footer">
+            Need an account? <a href="/signup">Create one</a>
+          </p>
+        </div>
+      </section>
+    </main>
   )
 }
