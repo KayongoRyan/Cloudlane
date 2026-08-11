@@ -13,23 +13,27 @@ export default function Home() {
     e.preventDefault()
     setError('')
 
+    const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/+$/, '')
+    const url = `${apiBase}/api/auth/login`
+
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/login`, {
+      const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       })
 
-      const data = await res.json()
+      const text = await res.text()
+      const data = text ? JSON.parse(text) : {}
 
       if (!res.ok) {
-        throw new Error(data.error || 'Login failed')
+        throw new Error(data?.error || text || `Login failed (${res.status})`)
       }
 
       localStorage.setItem('token', data.token)
       router.push('/dashboard')
     } catch (err: any) {
-      setError(err.message)
+      setError(err.message || 'Unable to sign in')
     }
   }
 

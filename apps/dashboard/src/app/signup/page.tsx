@@ -15,21 +15,32 @@ export default function SignupPage() {
         setError('')
 
         try {
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/register`, {
+            const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/+$/, '')
+            const url = `${apiBase}/api/auth/register`
+
+            const res = await fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, password, organization }),
             })
 
-            const data = await res.json()
+            const text = await res.text()
+            let data: any = {}
+
+            try {
+                data = text ? JSON.parse(text) : {}
+            } catch {
+                data = { error: text }
+            }
+
             if (!res.ok) {
-                throw new Error(data.error || 'Signup failed')
+                throw new Error(data.error || text || `Signup failed (${res.status})`)
             }
 
             localStorage.setItem('token', data.token)
             router.push('/dashboard')
         } catch (err: any) {
-            setError(err.message)
+            setError(err.message || 'Unable to create account')
         }
     }
 

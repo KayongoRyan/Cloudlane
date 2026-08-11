@@ -8,11 +8,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently \"npm run dev:api\" \"npm run dev:dashboard\"",
-    "dev:api": "npm run dev --workspace=@cloudlane/api",
-    "dev:dashboard": "npm run dev --workspace=@cloudlane/dashboard",
-    "build": "npm run build --workspaces",
-    "test": "npm run test --workspaces",
+    "dev": "concurrently \"cd apps/api && npm run dev\" \"cd apps/dashboard && npm run dev\"",
+    "dev:api": "cd apps/api && npm run dev",
+    "dev:dashboard": "cd apps/dashboard && npm run dev",
+    "build": "cd apps/api && npm run build && cd ../dashboard && npm run build",
+    "test": "cd apps/api && npm run test && cd ../dashboard && npm run test",
     "lint": "eslint . --ext .ts,.tsx"
   },
   "devDependencies": {
