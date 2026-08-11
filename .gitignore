@@ -43,6 +43,7 @@ Thumbs.db
 .cache/
 .tmp/
 .temp/
+.npm-cache/
 
 # Coverage
 coverage/

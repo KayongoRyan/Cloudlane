@@ -1,13 +1,15 @@
-import mongoose from 'mongoose';
 import config from './config';
 import app from './app';
+import { initializeDatabase } from './database';
 
 async function startServer() {
     try {
-        await mongoose.connect(config.mongoUri);
-        console.log('Connected to MongoDB');
+        await initializeDatabase();
+        console.log('Connected to PostgreSQL');
     } catch (error) {
-        console.error('Failed to connect to MongoDB:', error);
+        console.error('Failed to connect to PostgreSQL:', error);
+        process.exitCode = 1;
+        return;
     }
 
     app.listen(config.port, () => {

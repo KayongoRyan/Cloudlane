@@ -1,6 +1,6 @@
 import { Router, Response } from 'express';
 import { AuthRequest, authenticateJWT } from '../middleware/auth';
-import { Deployment } from '../models';
+import { createDeployment, listDeployments, updateDeploymentStatus } from '../database';
 import kubernetesService from '../services/kubernetes';
 
 const router = Router();
@@ -14,7 +14,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
         return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const deployments = await Deployment.find({ tenantId }).lean();
+    const deployments = await listDeployments(tenantId);
     return res.json({ deployments });
 });
 
@@ -39,7 +39,7 @@ router.post('/', async (req: AuthRequest, res: Response) => {
     const deploymentNamespace = `tenant-${tenantId}`;
     const deploymentName = name.replace(/\s+/g, '-').toLowerCase();
 
-    const deployment = await Deployment.create({
+    const deployment = await createDeployment({
         tenantId,
         name: deploymentName,
         image,
@@ -74,13 +74,11 @@ router.post('/', async (req: AuthRequest, res: Response) => {
             port
         );
 
-        deployment.status = 'running';
-        await deployment.save();
+        const runningDeployment = await updateDeploymentStatus(deployment.id, 'running');
 
-        return res.status(201).json({ deployment });
+        return res.status(201).json({ deployment: runningDeployment });
     } catch (error: any) {
-        deployment.status = 'failed';
-        await deployment.save();
+        await updateDeploymentStatus(deployment.id, 'failed');
         return res.status(500).json({ error: error.message || 'Failed to deploy' });
     }
 });

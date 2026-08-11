@@ -18,7 +18,7 @@ cloudlane deploy --image myrepo/app:v1 --port 8080
 Customer (CLI / dashboard)
         │
         ▼
-Control plane API  ──────────────►  MongoDB
+Control plane API  ──────────────►  PostgreSQL
 (Node.js + Express)                 (tenants, deployments, usage, billing records)
         │
         ▼
@@ -41,7 +41,7 @@ Customers never see Kubernetes, namespaces, or scaling config — Cloudlane hide
 | Dashboard | Next.js | SSR, file-based routing, API routes built-in |
 | CLI | Commander.js | Lightweight, composable |
 | Compute | Kubernetes (AWS EKS) | Industry standard, great multi-tenant isolation |
-| Database | MongoDB (Mongoose) | Flexible schema, fast iteration, great for usage/event data |
+| Database | PostgreSQL (`pg`) | Relational integrity and transactional tenant/account creation |
 | Billing | IremboPay | Local payment infrastructure, Rwanda-native |
 | Auth | JWT (dashboard) + API keys (CLI) | Stateless, easy to rotate |
 
@@ -63,7 +63,7 @@ cloudlane/
 ## Build phases
 
 ### Phase 1 — Core deploy loop (Weeks 1–4)
-- Multi-tenant MongoDB schema (tenants, users, deployments, API keys, audit logs)
+- Multi-tenant PostgreSQL schema (tenants, users, deployments, API keys, audit logs)
 - JWT + API key authentication
 - Kubernetes provisioning API (deploy container → namespace + service + ingress)
 - Scale-to-zero with KEDA (idle deployments spin down, wake on first request)
@@ -81,7 +81,7 @@ cloudlane/
 
 ### Phase 3 — Broader surface (beyond Week 8)
 - Managed object storage (S3-compatible)
-- Managed MongoDB databases for customers
+- Managed PostgreSQL databases for customers
 - Environment variables vault (secrets management)
 - Custom domains (BYOD)
 - Team/organisation accounts
@@ -90,7 +90,7 @@ cloudlane/
 
 - **Destructive-action safety** — deleting a tenant or deployment requires confirmation + a mandatory grace period; backups stored independently of the account record
 - **Staged control-plane rollouts** — config changes go to one internal tenant first, then percentage rollout, never all-at-once
-- **Tenant isolation** — one Kubernetes namespace per tenant, MongoDB documents always filtered by `tenantId`
+- **Tenant isolation** — one Kubernetes namespace per tenant, PostgreSQL queries always filtered by `tenant_id`
 - **Pricing transparency** — per-second billing, no hidden egress fees, usage visible in real time on dashboard
 
 ## Status
