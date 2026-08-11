@@ -33,6 +33,10 @@ export default function Home() {
       localStorage.setItem('token', data.token)
       router.push('/dashboard')
     } catch (err: any) {
+      if (err instanceof TypeError && err.message === 'Failed to fetch') {
+        setError(`Cannot reach the Cloudlane API at ${apiBase}. Start the API with a valid DATABASE_URL.`)
+        return
+      }
       setError(err.message || 'Unable to sign in')
     }
   }

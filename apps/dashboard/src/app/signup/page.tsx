@@ -13,9 +13,9 @@ export default function SignupPage() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setError('')
+        const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/+$/, '')
 
         try {
-            const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/+$/, '')
             const url = `${apiBase}/api/auth/register`
 
             const res = await fetch(url, {
@@ -40,6 +40,10 @@ export default function SignupPage() {
             localStorage.setItem('token', data.token)
             router.push('/dashboard')
         } catch (err: any) {
+            if (err instanceof TypeError && err.message === 'Failed to fetch') {
+                setError(`Cannot reach the Cloudlane API at ${apiBase}. Start the API with a valid DATABASE_URL.`)
+                return
+            }
             setError(err.message || 'Unable to create account')
         }
     }
