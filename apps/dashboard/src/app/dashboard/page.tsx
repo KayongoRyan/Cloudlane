@@ -33,7 +33,7 @@ export default function Dashboard() {
         return []
       }
 
-      const res = await fetch(`${process.env.API_URL}${url}`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${url}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -57,7 +57,7 @@ export default function Dashboard() {
     const token = localStorage.getItem('token')
 
     try {
-      const res = await fetch(`${process.env.API_URL}/api/deployments`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/deployments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -112,8 +112,8 @@ export default function Dashboard() {
       <main className="dashboard-main">
         <section className="hero-panel">
           <div>
-            <p className="eyebrow">Operations overview</p>
-            <h2>Keep every release calm, visible, and ready to share.</h2>
+            <p className="eyebrow">Welcome back</p>
+            <h2>Your control plane is ready for the next launch.</h2>
             <p>
               Review deployments, verify live URLs, and launch new services from a
               single, polished workspace.
