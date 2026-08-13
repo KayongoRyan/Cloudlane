@@ -1,5 +1,5 @@
-import { Pool, PoolClient } from 'pg';
 import { v4 as uuidv4 } from 'uuid';
+import { MongoClient, Db, Collection } from 'mongodb';
 import config from './config';
 
 export type TenantTier = 'free' | 'pro' | 'enterprise';
@@ -47,209 +47,155 @@ interface ApiKeyRecord {
   prefix: string;
 }
 
-const pool = new Pool({ connectionString: config.databaseUrl });
+let client: MongoClient | null = null;
+let db: Db | null = null;
 
-export async function initializeDatabase(): Promise<void> {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS tenants (
-        id UUID PRIMARY KEY,
-        name TEXT NOT NULL,
-        slug TEXT NOT NULL UNIQUE,
-        owner_id UUID,
-        tier TEXT NOT NULL DEFAULT 'free' CHECK (tier IN ('free', 'pro', 'enterprise')),
-        status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'deleted')),
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-      CREATE TABLE IF NOT EXISTS users (
-        id UUID PRIMARY KEY,
-        tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-        email TEXT NOT NULL UNIQUE,
-        password_hash TEXT NOT NULL,
-        role TEXT NOT NULL DEFAULT 'developer' CHECK (role IN ('admin', 'developer', 'viewer')),
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-      CREATE TABLE IF NOT EXISTS api_keys (
-        id UUID PRIMARY KEY,
-        tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-        name TEXT NOT NULL,
-        key_hash TEXT NOT NULL,
-        prefix TEXT NOT NULL,
-        expires_at TIMESTAMPTZ,
-        last_used_at TIMESTAMPTZ,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-      CREATE TABLE IF NOT EXISTS deployments (
-        id UUID PRIMARY KEY,
-        tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-        name TEXT NOT NULL,
-        image TEXT NOT NULL,
-        port INTEGER NOT NULL DEFAULT 8080,
-        subdomain TEXT NOT NULL UNIQUE,
-        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'deploying', 'running', 'stopped', 'failed')),
-        scale_to_zero BOOLEAN NOT NULL DEFAULT TRUE,
-        min_replicas INTEGER NOT NULL DEFAULT 0,
-        max_replicas INTEGER NOT NULL DEFAULT 10,
-        current_replicas INTEGER NOT NULL DEFAULT 0,
-        kubernetes_namespace TEXT NOT NULL,
-        environment JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-      CREATE TABLE IF NOT EXISTS usage_records (
-        id UUID PRIMARY KEY,
-        tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-        deployment_id UUID NOT NULL REFERENCES deployments(id) ON DELETE CASCADE,
-        timestamp TIMESTAMPTZ NOT NULL,
-        duration_seconds DOUBLE PRECISION NOT NULL,
-        request_count INTEGER NOT NULL DEFAULT 0,
-        memory_mb_seconds DOUBLE PRECISION NOT NULL DEFAULT 0,
-        cpu_millis_seconds DOUBLE PRECISION NOT NULL DEFAULT 0,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-      CREATE TABLE IF NOT EXISTS billing_records (
-        id UUID PRIMARY KEY,
-        tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-        period_start TIMESTAMPTZ NOT NULL,
-        period_end TIMESTAMPTZ NOT NULL,
-        total_amount NUMERIC NOT NULL,
-        currency TEXT NOT NULL DEFAULT 'RWF',
-        status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'failed')),
-        irembo_pay_transaction_id TEXT,
-        breakdown JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-      CREATE TABLE IF NOT EXISTS audit_logs (
-        id UUID PRIMARY KEY,
-        tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-        user_id UUID REFERENCES users(id) ON DELETE SET NULL,
-        action TEXT NOT NULL,
-        resource_type TEXT NOT NULL,
-        resource_id TEXT,
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        ip_address TEXT,
-        user_agent TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-      CREATE INDEX IF NOT EXISTS users_tenant_id_idx ON users(tenant_id);
-      CREATE INDEX IF NOT EXISTS api_keys_tenant_id_idx ON api_keys(tenant_id);
-      CREATE INDEX IF NOT EXISTS api_keys_prefix_idx ON api_keys(prefix);
-      CREATE INDEX IF NOT EXISTS deployments_tenant_id_idx ON deployments(tenant_id);
-      CREATE INDEX IF NOT EXISTS usage_records_tenant_timestamp_idx ON usage_records(tenant_id, timestamp DESC);
-      CREATE INDEX IF NOT EXISTS usage_records_deployment_timestamp_idx ON usage_records(deployment_id, timestamp DESC);
-      CREATE INDEX IF NOT EXISTS billing_records_tenant_period_idx ON billing_records(tenant_id, period_start DESC);
-      CREATE INDEX IF NOT EXISTS audit_logs_tenant_created_idx ON audit_logs(tenant_id, created_at DESC);
-    `);
-    await client.query('COMMIT');
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
+let tenantsCol: Collection | null = null;
+let usersCol: Collection | null = null;
+let deploymentsCol: Collection | null = null;
+let apiKeysCol: Collection | null = null;
+
+function mapTenant(doc: any): TenantRecord {
+  return { id: doc.id, name: doc.name, slug: doc.slug, ownerId: doc.ownerId ?? null, tier: doc.tier, status: doc.status };
 }
 
-function mapTenant(row: any): TenantRecord {
-  return { id: row.id, name: row.name, slug: row.slug, ownerId: row.owner_id, tier: row.tier, status: row.status };
+function mapUser(doc: any): UserRecord {
+  return { id: doc.id, tenantId: doc.tenantId, email: doc.email, passwordHash: doc.passwordHash, role: doc.role };
 }
 
-function mapUser(row: any): UserRecord {
-  return { id: row.id, tenantId: row.tenant_id, email: row.email, passwordHash: row.password_hash, role: row.role };
-}
-
-function mapDeployment(row: any): DeploymentRecord {
+function mapDeployment(doc: any): DeploymentRecord {
   return {
-    id: row.id, tenantId: row.tenant_id, name: row.name, image: row.image, port: row.port,
-    subdomain: row.subdomain, status: row.status, scaleToZero: row.scale_to_zero,
-    minReplicas: row.min_replicas, maxReplicas: row.max_replicas, currentReplicas: row.current_replicas,
-    kubernetesNamespace: row.kubernetes_namespace, environment: row.environment,
+    id: doc.id,
+    tenantId: doc.tenantId,
+    name: doc.name,
+    image: doc.image,
+    port: doc.port,
+    subdomain: doc.subdomain,
+    status: doc.status,
+    scaleToZero: doc.scaleToZero,
+    minReplicas: doc.minReplicas,
+    maxReplicas: doc.maxReplicas,
+    currentReplicas: doc.currentReplicas,
+    kubernetesNamespace: doc.kubernetesNamespace,
+    environment: doc.environment || {},
   };
 }
 
+export async function initializeDatabase(): Promise<void> {
+  const url = config.databaseUrl;
+  if (!url || !url.startsWith('mongodb')) {
+    throw new Error('DATABASE_URL must be a mongodb:// URL when using MongoDB backend');
+  }
+
+  client = new MongoClient(url);
+  await client.connect();
+  db = client.db();
+
+  tenantsCol = db.collection('tenants');
+  usersCol = db.collection('users');
+  deploymentsCol = db.collection('deployments');
+  apiKeysCol = db.collection('api_keys');
+
+  // Create indexes similar to SQL constraints
+  await tenantsCol.createIndex({ slug: 1 }, { unique: true });
+  await usersCol.createIndex({ email: 1 }, { unique: true });
+  await apiKeysCol.createIndex({ prefix: 1 });
+  await deploymentsCol.createIndex({ subdomain: 1 }, { unique: true });
+  await usersCol.createIndex({ tenantId: 1 });
+  await apiKeysCol.createIndex({ tenantId: 1 });
+  await deploymentsCol.createIndex({ tenantId: 1 });
+}
+
+export async function closeDatabase(): Promise<void> {
+  if (client) await client.close();
+  client = null;
+  db = null;
+}
+
 export async function findUserByEmail(email: string): Promise<UserRecord | null> {
-  const result = await pool.query('SELECT * FROM users WHERE email = $1', [email.toLowerCase()]);
-  return result.rowCount ? mapUser(result.rows[0]) : null;
+  if (!usersCol) throw new Error('DB not initialized');
+  const doc = await usersCol.findOne({ email: email.toLowerCase() });
+  return doc ? mapUser(doc) : null;
 }
 
 export async function findUserByIdAndTenant(id: string, tenantId: string): Promise<UserRecord | null> {
-  const result = await pool.query('SELECT * FROM users WHERE id = $1 AND tenant_id = $2', [id, tenantId]);
-  return result.rowCount ? mapUser(result.rows[0]) : null;
+  if (!usersCol) throw new Error('DB not initialized');
+  const doc = await usersCol.findOne({ id, tenantId });
+  return doc ? mapUser(doc) : null;
 }
 
-export async function createTenant(client: PoolClient, name: string, slug: string): Promise<TenantRecord> {
-  const result = await client.query(
-    `INSERT INTO tenants (id, name, slug, tier, status) VALUES ($1, $2, $3, 'free', 'active') RETURNING *`,
-    [uuidv4(), name, slug]
-  );
-  return mapTenant(result.rows[0]);
+export async function createTenant(name: string, slug: string): Promise<TenantRecord> {
+  if (!tenantsCol) throw new Error('DB not initialized');
+  const doc = { id: uuidv4(), name, slug, ownerId: null, tier: 'free', status: 'active' } as any;
+  await tenantsCol.insertOne(doc);
+  return mapTenant(doc);
 }
 
-export async function createUser(client: PoolClient, tenantId: string, email: string, passwordHash: string): Promise<UserRecord> {
-  const result = await client.query(
-    `INSERT INTO users (id, tenant_id, email, password_hash, role) VALUES ($1, $2, $3, $4, 'admin') RETURNING *`,
-    [uuidv4(), tenantId, email.toLowerCase(), passwordHash]
-  );
-  return mapUser(result.rows[0]);
+export async function createUser(tenantId: string, email: string, passwordHash: string): Promise<UserRecord> {
+  if (!usersCol) throw new Error('DB not initialized');
+  const doc = { id: uuidv4(), tenantId, email: email.toLowerCase(), passwordHash, role: 'admin' } as any;
+  await usersCol.insertOne(doc);
+  return mapUser(doc);
 }
 
-export async function setTenantOwner(client: PoolClient, tenantId: string, ownerId: string): Promise<void> {
-  await client.query('UPDATE tenants SET owner_id = $1, updated_at = NOW() WHERE id = $2', [ownerId, tenantId]);
+export async function setTenantOwner(tenantId: string, ownerId: string): Promise<void> {
+  if (!tenantsCol) throw new Error('DB not initialized');
+  await tenantsCol.updateOne({ id: tenantId }, { $set: { ownerId } });
 }
 
 export async function createUserAndTenant(name: string, slug: string, email: string, passwordHash: string): Promise<UserRecord> {
-  const client = await pool.connect();
+  if (!tenantsCol || !usersCol) throw new Error('DB not initialized');
+
+  // Standalone Mongo (local docker) has no replica set — skip multi-doc transactions.
+  const tenant = { id: uuidv4(), name, slug, ownerId: null, tier: 'free', status: 'active' } as any;
+  await tenantsCol.insertOne(tenant);
+
   try {
-    await client.query('BEGIN');
-    const tenant = await createTenant(client, name, slug);
-    const user = await createUser(client, tenant.id, email, passwordHash);
-    await setTenantOwner(client, tenant.id, user.id);
-    await client.query('COMMIT');
-    return user;
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
+    const userDoc = {
+      id: uuidv4(),
+      tenantId: tenant.id,
+      email: email.toLowerCase(),
+      passwordHash,
+      role: 'admin',
+    } as any;
+    await usersCol.insertOne(userDoc);
+    await tenantsCol.updateOne({ id: tenant.id }, { $set: { ownerId: userDoc.id } });
+    return mapUser(userDoc);
+  } catch (err) {
+    await tenantsCol.deleteOne({ id: tenant.id }).catch(() => undefined);
+    throw err;
   }
 }
 
 export async function listDeployments(tenantId: string): Promise<DeploymentRecord[]> {
-  const result = await pool.query('SELECT * FROM deployments WHERE tenant_id = $1 ORDER BY created_at DESC', [tenantId]);
-  return result.rows.map(mapDeployment);
+  if (!deploymentsCol) throw new Error('DB not initialized');
+  const docs = await deploymentsCol.find({ tenantId }).sort({ createdAt: -1 }).toArray();
+  return docs.map(mapDeployment);
 }
 
 export async function createDeployment(input: Omit<DeploymentRecord, 'id'>): Promise<DeploymentRecord> {
-  const result = await pool.query(
-    `INSERT INTO deployments (id, tenant_id, name, image, port, subdomain, status, scale_to_zero, min_replicas, max_replicas, current_replicas, kubernetes_namespace, environment)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb) RETURNING *`,
-    [uuidv4(), input.tenantId, input.name, input.image, input.port, input.subdomain, input.status,
-      input.scaleToZero, input.minReplicas, input.maxReplicas, input.currentReplicas, input.kubernetesNamespace,
-      JSON.stringify(input.environment)]
-  );
-  return mapDeployment(result.rows[0]);
+  if (!deploymentsCol) throw new Error('DB not initialized');
+  const doc = { id: uuidv4(), ...input, createdAt: new Date(), updatedAt: new Date() } as any;
+  await deploymentsCol.insertOne(doc);
+  return mapDeployment(doc);
 }
 
 export async function updateDeploymentStatus(id: string, status: DeploymentStatus): Promise<DeploymentRecord> {
-  const result = await pool.query('UPDATE deployments SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *', [status, id]);
-  if (!result.rowCount) throw new Error('Deployment not found');
-  return mapDeployment(result.rows[0]);
+  if (!deploymentsCol) throw new Error('DB not initialized');
+  const res = await deploymentsCol.findOneAndUpdate({ id }, { $set: { status, updatedAt: new Date() } }, { returnDocument: 'after' as any });
+  if (!res.value) throw new Error('Deployment not found');
+  return mapDeployment(res.value);
 }
 
 export async function findApiKey(prefix: string, keyHash: string): Promise<ApiKeyRecord | null> {
-  const result = await pool.query('SELECT id, tenant_id, key_hash, prefix FROM api_keys WHERE prefix = $1 AND key_hash = $2', [prefix, keyHash]);
-  if (!result.rowCount) return null;
-  const row = result.rows[0];
-  return { id: row.id, tenantId: row.tenant_id, keyHash: row.key_hash, prefix: row.prefix };
+  if (!apiKeysCol) throw new Error('DB not initialized');
+  const doc = await apiKeysCol.findOne({ prefix, keyHash });
+  if (!doc) return null;
+  return { id: doc.id, tenantId: doc.tenantId, keyHash: doc.keyHash, prefix: doc.prefix };
 }
 
 export async function markApiKeyUsed(id: string): Promise<void> {
-  await pool.query('UPDATE api_keys SET last_used_at = NOW() WHERE id = $1', [id]);
+  if (!apiKeysCol) throw new Error('DB not initialized');
+  await apiKeysCol.updateOne({ id }, { $set: { lastUsedAt: new Date() } });
 }
 
-export async function closeDatabase(): Promise<void> {
-  await pool.end();
-}

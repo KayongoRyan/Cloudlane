@@ -1,0 +1,11 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: cloudlane-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - cloudlane_mongo_data:/data/db
+
+volumes:
+  cloudlane_mongo_data:

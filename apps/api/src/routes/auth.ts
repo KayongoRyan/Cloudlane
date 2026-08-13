@@ -34,7 +34,8 @@ router.post('/register', async (req, res) => {
 
     return res.status(201).json({ token });
   } catch (error: any) {
-    if (error?.code === '23505') {
+    // Mongo duplicate key (11000) or legacy Postgres unique violation
+    if (error?.code === 11000 || error?.code === '23505') {
       return res.status(409).json({ error: 'A user with this email already exists' });
     }
     console.error('Registration failed:', error);

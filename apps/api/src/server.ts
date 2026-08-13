@@ -5,9 +5,9 @@ import { initializeDatabase } from './database';
 async function startServer() {
     try {
         await initializeDatabase();
-        console.log('Connected to PostgreSQL');
+        console.log('Connected to MongoDB');
     } catch (error) {
-        console.error('Failed to connect to PostgreSQL:', error);
+        console.error('Failed to connect to MongoDB:', error);
         process.exitCode = 1;
         return;
     }

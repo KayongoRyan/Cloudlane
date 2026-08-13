@@ -1,23 +1,26 @@
 'use client'
 
-import { useState } from 'react'
+import { FormEvent, useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 export default function Home() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const router = useRouter()
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
+    setLoading(true)
 
     const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/+$/, '')
-    const url = `${apiBase}/api/auth/login`
 
     try {
-      const res = await fetch(url, {
+      const res = await fetch(`${apiBase}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -34,86 +37,83 @@ export default function Home() {
       router.push('/dashboard')
     } catch (err: any) {
       if (err instanceof TypeError && err.message === 'Failed to fetch') {
-        setError(`Cannot reach the Cloudlane API at ${apiBase}. Start the API with a valid DATABASE_URL.`)
+        setError(`Cannot reach the API at ${apiBase}. Start MongoDB and the API.`)
         return
       }
       setError(err.message || 'Unable to sign in')
+    } finally {
+      setLoading(false)
     }
   }
 
   return (
-    <main className="auth-page auth-page-cloudlane">
-      <section className="auth-panel auth-panel-cloudlane">
-        <div className="auth-copy auth-copy-cloudlane">
-          <div className="brand-badge brand-badge-cloudlane">CLOUDLANE</div>
-
-          <h1>
-            Deploy faster with a
-            <br />
-            calm, modern control
-            <br />
-            plane.
+    <main className="auth-shell">
+      <div className="auth-atmosphere" aria-hidden="true" />
+      <div className="auth-grid">
+        <section className="auth-brand">
+          <p className="auth-wordmark">Cloudlane</p>
+          <h1 className="auth-headline">
+            Deploy a container.
+            <span> Get a live URL.</span>
           </h1>
-
-          <p className="hero-subtitle">
-            Ship new versions in minutes with a polished workspace for managing
-            containers, domains, and release health from one view.
+          <p className="auth-lede">
+            Scale to zero when idle. Pay only for the seconds you use.
           </p>
+        </section>
 
-          <ul className="auth-list auth-list-cloudlane">
-            <li>⚡ One-click deployment flow</li>
-            <li>🌐 Live URLs for every app</li>
-            <li>📈 Clear operational visibility</li>
-          </ul>
-        </div>
-
-        <div className="auth-card auth-card-cloudlane">
-          <div className="card-header cloudlane-card-header">
+        <section className="auth-form-panel">
+          <div className="auth-form-head">
             <h2>Welcome back</h2>
             <p>Sign in to your workspace</p>
           </div>
 
           <form className="auth-form" onSubmit={handleSubmit}>
-            {error && <div className="error-banner cloudlane-error">{error}</div>}
+            {error && <div className="auth-error" role="alert">{error}</div>}
 
-            <div className="form-field cloudlane-field">
-              <label htmlFor="email">Email</label>
+            <label className="auth-field">
+              <span>Email</span>
               <input
-                id="email"
-                name="email"
                 type="email"
                 autoComplete="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="kayongryan@gmail.com"
+                placeholder="you@company.com"
               />
-            </div>
+            </label>
 
-            <div className="form-field cloudlane-field">
-              <label htmlFor="password">Password</label>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                autoComplete="current-password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-              />
-            </div>
+            <label className="auth-field">
+              <span>Password</span>
+              <div className="auth-input-wrap">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                />
+                <button
+                  type="button"
+                  className="auth-reveal"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? 'Hide' : 'Show'}
+                </button>
+              </div>
+            </label>
 
-            <button type="submit" className="button-primary cloudlane-button">
-              Sign in
+            <button type="submit" className="auth-submit" disabled={loading}>
+              {loading ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
 
-          <p className="auth-footer cloudlane-footer">
-            Need an account? <a href="/signup">Create one</a>
+          <p className="auth-switch">
+            Need an account? <Link href="/signup">Create one</Link>
           </p>
-        </div>
-      </section>
+        </section>
+      </div>
     </main>
   )
 }
