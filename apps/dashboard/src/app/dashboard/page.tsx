@@ -87,56 +87,63 @@ export default function Dashboard() {
   const deploymentCount = deployments?.length ?? 0
 
   return (
-    <div className="dashboard-shell">
-      <nav className="topbar">
-        <div className="brand">
-          <div className="brand-mark">CL</div>
-          <div>
-            <h1>Cloudlane</h1>
-            <p>Platform control center</p>
+    <div className="cloudrun-shell">
+      <header className="cloudrun-header">
+        <div className="cloudrun-brand">
+          <div className="gcloud-logo" aria-label="Google Cloud logo">
+            <span className="gcloud-dot blue" />
+            <span className="gcloud-dot red" />
+            <span className="gcloud-dot yellow" />
+            <span className="gcloud-dot green" />
           </div>
+          <span className="brand-name">Google Cloud</span>
         </div>
-        <div className="topbar-actions">
-          <button
-            onClick={() => setShowDeployForm(true)}
-            className="button-primary"
-          >
-            New deployment
-          </button>
-          <button onClick={handleLogout} className="button-secondary">
-            Logout
-          </button>
-        </div>
-      </nav>
 
-      <main className="dashboard-main">
-        <section className="hero-panel">
-          <div>
-            <p className="eyebrow">Welcome back</p>
-            <h2>Your control plane is ready for the next launch.</h2>
-            <p>
-              Review deployments, verify live URLs, and launch new services from a
-              single, polished workspace.
-            </p>
-          </div>
-          <div className="hero-stats">
-            <div className="stat-card">
-              <span>{deploymentCount}</span>
-              <p>Active deployments</p>
-            </div>
-            <div className="stat-card">
-              <span>99.9%</span>
-              <p>Platform uptime</p>
+        <nav className="cloudrun-nav" aria-label="Main navigation">
+          <a href="#">Overview</a>
+          <a href="#">Solutions</a>
+          <a href="#">Products</a>
+          <a href="#">Pricing</a>
+          <a href="#">Resources</a>
+        </nav>
+
+        <div className="cloudrun-header-actions">
+          <button type="button" className="icon-button" aria-label="Search">
+            ⌕
+          </button>
+          <a href="#">Docs</a>
+          <a href="#">Support</a>
+          <button type="button" className="console-button">Console</button>
+          <button type="button" className="avatar-button" aria-label="Profile">◉</button>
+        </div>
+      </header>
+
+      <main className="cloudrun-main">
+        <section className="cloudrun-hero">
+          <div className="cloudrun-copy">
+            <h1>Build what&apos;s next. Better software. Faster.</h1>
+
+            <ul className="cloudrun-features">
+              <li>✓ Use Google&apos;s core infrastructure, data analytics, and machine learning</li>
+              <li>✓ Protect your data and apps with the same security technology Google uses</li>
+              <li>✓ Avoid vendor lock-in and run your apps on open source solutions</li>
+            </ul>
+
+            <div className="cloudrun-actions">
+              <button type="button" className="primary-cta">Contact sales</button>
+              <button type="button" className="secondary-cta" onClick={() => setShowDeployForm(true)}>
+                Go to my console
+              </button>
             </div>
           </div>
         </section>
 
-        <section className="content-grid">
-          <div className="panel">
+        <section className="cloudrun-console">
+          <div className="panel panel-lg">
             <div className="panel-header">
               <div>
                 <p className="eyebrow">Deployments</p>
-                <h3>Your applications</h3>
+                <h3>Your Cloudlane applications</h3>
               </div>
               <button
                 onClick={() => setShowDeployForm(true)}
@@ -196,7 +203,7 @@ export default function Dashboard() {
           <aside className="panel side-panel">
             <div className="side-card">
               <h4>Deployment tips</h4>
-              <p>Use a versioned image tag to keep releases predictable and easy to roll back.</p>
+              <p>Use versioned image tags to keep releases predictable and easy to roll back.</p>
             </div>
             <div className="side-card">
               <h4>What you can do next</h4>
@@ -206,9 +213,21 @@ export default function Dashboard() {
                 <li>Share a public URL instantly</li>
               </ul>
             </div>
+            <div className="side-card side-card-cta">
+              <button type="button" className="button-primary" onClick={() => setShowDeployForm(true)}>
+                New deployment
+              </button>
+              <button type="button" className="button-secondary" onClick={handleLogout}>
+                Logout
+              </button>
+            </div>
           </aside>
         </section>
       </main>
+
+      <button type="button" className="cloudrun-chat" aria-label="Chat support">
+        💬
+      </button>
 
       {showDeployForm && (
         <div className="modal-overlay" role="dialog" aria-modal="true">

@@ -42,32 +42,41 @@ export default function Home() {
   }
 
   return (
-    <main className="auth-page">
-      <section className="auth-panel">
-        <div className="auth-copy">
-          <span className="brand-badge">Cloudlane</span>
-          <h1>Deploy faster with a calm, modern control plane.</h1>
-          <p>
+    <main className="auth-page auth-page-cloudlane">
+      <section className="auth-panel auth-panel-cloudlane">
+        <div className="auth-copy auth-copy-cloudlane">
+          <div className="brand-badge brand-badge-cloudlane">CLOUDLANE</div>
+
+          <h1>
+            Deploy faster with a
+            <br />
+            calm, modern control
+            <br />
+            plane.
+          </h1>
+
+          <p className="hero-subtitle">
             Ship new versions in minutes with a polished workspace for managing
             containers, domains, and release health from one view.
           </p>
-          <ul className="auth-list">
+
+          <ul className="auth-list auth-list-cloudlane">
             <li>⚡ One-click deployment flow</li>
             <li>🌐 Live URLs for every app</li>
             <li>📈 Clear operational visibility</li>
           </ul>
         </div>
 
-        <div className="auth-card">
-          <div className="card-header">
+        <div className="auth-card auth-card-cloudlane">
+          <div className="card-header cloudlane-card-header">
             <h2>Welcome back</h2>
             <p>Sign in to your workspace</p>
           </div>
 
           <form className="auth-form" onSubmit={handleSubmit}>
-            {error && <div className="error-banner">{error}</div>}
+            {error && <div className="error-banner cloudlane-error">{error}</div>}
 
-            <div className="form-field">
+            <div className="form-field cloudlane-field">
               <label htmlFor="email">Email</label>
               <input
                 id="email"
@@ -77,11 +86,11 @@ export default function Home() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@company.com"
+                placeholder="kayongryan@gmail.com"
               />
             </div>
 
-            <div className="form-field">
+            <div className="form-field cloudlane-field">
               <label htmlFor="password">Password</label>
               <input
                 id="password"
@@ -95,12 +104,12 @@ export default function Home() {
               />
             </div>
 
-            <button type="submit" className="button-primary">
+            <button type="submit" className="button-primary cloudlane-button">
               Sign in
             </button>
           </form>
 
-          <p className="auth-footer">
+          <p className="auth-footer cloudlane-footer">
             Need an account? <a href="/signup">Create one</a>
           </p>
         </div>
