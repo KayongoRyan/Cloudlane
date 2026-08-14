@@ -1,8 +1,9 @@
 'use client'
 
-import { FormEvent, useState } from 'react'
+import { CSSProperties, FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import useSWR from 'swr'
+import Logo from '../../components/Logo'
 
 interface Deployment {
   id: string
@@ -23,6 +24,14 @@ export default function Dashboard() {
   const [deployData, setDeployData] = useState({ name: '', image: '', port: 8080 })
   const [formError, setFormError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [navScrolled, setNavScrolled] = useState(false)
+
+  useEffect(() => {
+    const onScroll = () => setNavScrolled(window.scrollY > 12)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
 
   const { data: deployments, mutate, isLoading } = useSWR<Deployment[]>(
     'deployments',
@@ -91,56 +100,105 @@ export default function Dashboard() {
 
   return (
     <div className="gcp-shell">
-      <header className="gcp-header">
-        <a className="gcp-brand" href="/dashboard">
-          <span className="gcp-mark" aria-hidden="true" />
-          <span className="gcp-brand-text">Cloudlane</span>
-        </a>
+      <section className="hero-sky" id="overview">
+        <div className="hero-sky-media" aria-hidden="true" />
 
-        <nav className="gcp-nav" aria-label="Main">
-          <a href="#overview">Overview</a>
-          <a href="#console">Deployments</a>
-          <a href="#console">Pricing</a>
-          <a href="#console">Docs</a>
-        </nav>
+        <header className={`hero-sky-header${navScrolled ? ' is-scrolled' : ''}`}>
+          <a className="hero-sky-brand" href="/dashboard">
+            <Logo size="sm" />
+          </a>
 
-        <div className="gcp-header-actions">
-          <a href="#console">Support</a>
-          <button type="button" className="gcp-console-btn" onClick={scrollToConsole}>
-            Console
-          </button>
-          <button type="button" className="gcp-avatar" onClick={handleLogout} title="Sign out">
-            CL
-          </button>
-        </div>
-      </header>
+          <nav className="hero-sky-nav" aria-label="Main">
+            <a href="#overview">Overview</a>
+            <a href="#console">Deployments</a>
+            <a href="#console">Pricing</a>
+            <a href="#console">Docs</a>
+          </nav>
 
-      <main>
-        <section className="gcp-hero" id="overview">
-          <div className="gcp-hero-inner">
-            <h1 className="gcp-headline">
-              Build what&apos;s next.
-              <br />
-              Better software. Faster.
-            </h1>
+          <div className="hero-sky-actions">
+            <button type="button" className="hero-sky-console" onClick={scrollToConsole}>
+              Console
+            </button>
+            <button type="button" className="gcp-avatar" onClick={handleLogout} title="Sign out">
+              CL
+            </button>
+          </div>
+        </header>
 
-            <ul className="gcp-benefits">
-              <li>Deploy a container and get a live URL in one command</li>
-              <li>Scale to zero when idle — pay only for the seconds you use</li>
-              <li>Stay clear of cluster complexity with a Cloud Run–simple control plane</li>
-            </ul>
+        <div className="hero-sky-stage">
+          <h1 className="hero-sky-title">
+            <span className="hero-sky-title-fill">CLOUDLANE</span>
+          </h1>
+          <p className="hero-sky-lede">
+            Deploy in seconds. Live URL instantly. Pay per use.
+          </p>
 
-            <div className="gcp-ctas">
-              <button type="button" className="gcp-btn-primary" onClick={() => setShowDeployForm(true)}>
-                Deploy now
-              </button>
-              <button type="button" className="gcp-btn-secondary" onClick={scrollToConsole}>
-                Go to my console
-              </button>
+          <div className="hero-showcase" aria-hidden="true">
+            <div className="hero-showcase-scene">
+              <div className="hero-showcase-track">
+                <article className="hero-card hero-card--cli" style={{ '--offset': -2 } as CSSProperties}>
+                  <p className="hero-card-kicker">CLI</p>
+                  <pre>{`$ cloudlane deploy\n  --image app:v1`}</pre>
+                  <span className="hero-card-foot">One command</span>
+                </article>
+
+                <article className="hero-card hero-card--url" style={{ '--offset': -1 } as CSSProperties}>
+                  <p className="hero-card-kicker">Live URL</p>
+                  <p className="hero-card-url">app-x7k2.cloudlane.run</p>
+                  <div className="hero-card-bar"><span style={{ width: '78%' }} /></div>
+                  <span className="hero-card-foot">Published instantly</span>
+                </article>
+
+                <article className="hero-card hero-card--center" style={{ '--offset': 0 } as CSSProperties}>
+                  <p className="hero-card-kicker">Control plane</p>
+                  <h3>Intelligence in every deploy</h3>
+                  <svg className="hero-card-chart" viewBox="0 0 160 64" fill="none">
+                    <path d="M4 48 C28 46 36 20 56 28 C76 36 88 12 108 18 C128 24 140 8 156 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+                    <path d="M4 48 C28 46 36 20 56 28 C76 36 88 12 108 18 C128 24 140 8 156 10 V64 H4 Z" fill="currentColor" opacity="0.12" />
+                  </svg>
+                  <span className="hero-card-foot">Healthy · running</span>
+                </article>
+
+                <article className="hero-card hero-card--bill" style={{ '--offset': 1 } as CSSProperties}>
+                  <p className="hero-card-kicker">Usage</p>
+                  <p className="hero-card-stat">$0.12<span>/hr</span></p>
+                  <ul>
+                    <li><span>Compute</span><b>42s</b></li>
+                    <li><span>Idle</span><b>$0</b></li>
+                  </ul>
+                  <span className="hero-card-foot">Pay per second</span>
+                </article>
+
+                <article className="hero-card hero-card--scale" style={{ '--offset': 2 } as CSSProperties}>
+                  <p className="hero-card-kicker">Scale to zero</p>
+                  <div className="hero-card-meters">
+                    <div><span>Idle</span><strong>0</strong></div>
+                    <div><span>Peak</span><strong>N</strong></div>
+                  </div>
+                  <span className="hero-card-foot">Wake on request</span>
+                </article>
+              </div>
+            </div>
+            <div className="hero-showcase-rating">
+              <p>Built for deploy → URL → scale-to-zero</p>
+              <div className="hero-showcase-stars" aria-hidden="true">
+                <span /><span /><span /><span /><span />
+              </div>
             </div>
           </div>
-        </section>
 
+          <div className="hero-sky-ctas">
+            <button type="button" className="gcp-btn-primary" onClick={() => setShowDeployForm(true)}>
+              Deploy now
+            </button>
+            <button type="button" className="hero-sky-ghost" onClick={scrollToConsole}>
+              Open console
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <main>
         <section className="gcp-console" id="console">
           <div className="gcp-console-inner">
             <div className="gcp-console-head">

@@ -3,6 +3,7 @@
 import { FormEvent, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import Logo from '../components/Logo'
 
 export default function Home() {
   const [email, setEmail] = useState('')
@@ -51,7 +52,7 @@ export default function Home() {
       <div className="auth-atmosphere" aria-hidden="true" />
       <div className="auth-grid">
         <section className="auth-brand">
-          <p className="auth-wordmark">Cloudlane</p>
+          <Logo size="lg" className="auth-logo" />
           <h1 className="auth-headline">
             Deploy a container.
             <span> Get a live URL.</span>
