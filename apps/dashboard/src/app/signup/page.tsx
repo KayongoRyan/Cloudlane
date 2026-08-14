@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Logo from '../../components/Logo'
 import { getApiBase, apiReachabilityHint } from '../../lib/api'
+import { apiFetch } from '../../lib/apiFetch'
 
 export default function SignupPage() {
   const [email, setEmail] = useState('')
@@ -23,7 +24,7 @@ export default function SignupPage() {
     const apiBase = getApiBase()
 
     try {
-      const res = await fetch(`${apiBase}/api/auth/register`, {
+      const res = await apiFetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password, organization }),

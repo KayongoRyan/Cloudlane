@@ -24,5 +24,5 @@ export function apiReachabilityHint(apiBase: string): string {
   if (apiBase.includes('localhost')) {
     return 'Start MongoDB (docker compose up -d) and the API (cd apps/api && npm run dev).'
   }
-  return 'Check that the API is deployed on Netlify and DATABASE_URL is set.'
+  return 'On Netlify: set DATABASE_URL (MongoDB Atlas) and JWT_SECRET, then trigger a redeploy.'
 }

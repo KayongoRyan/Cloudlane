@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Logo from '../components/Logo'
 import { getApiBase, apiReachabilityHint } from '../lib/api'
+import { apiFetch } from '../lib/apiFetch'
 
 export default function Home() {
   const [email, setEmail] = useState('')
@@ -22,7 +23,7 @@ export default function Home() {
     const apiBase = getApiBase()
 
     try {
-      const res = await fetch(`${apiBase}/api/auth/login`, {
+      const res = await apiFetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

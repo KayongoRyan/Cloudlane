@@ -86,10 +86,20 @@ export async function initializeDatabase(): Promise<void> {
 
   const url = config.databaseUrl;
   if (!url || !url.startsWith('mongodb')) {
-    throw new Error('DATABASE_URL must be a mongodb:// URL when using MongoDB backend');
+    const hint = config.isNetlify
+      ? 'Set DATABASE_URL in Netlify → Environment variables (MongoDB Atlas URI).'
+      : 'DATABASE_URL must be a mongodb:// or mongodb+srv:// URL.';
+    throw new Error(hint);
   }
 
-  client = new MongoClient(url);
+  if (config.isNetlify && url.includes('localhost')) {
+    throw new Error('DATABASE_URL cannot point to localhost on Netlify. Use MongoDB Atlas.');
+  }
+
+  client = new MongoClient(url, {
+    serverSelectionTimeoutMS: 8000,
+    connectTimeoutMS: 8000,
+  });
   await client.connect();
   db = client.db();
 

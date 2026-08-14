@@ -14,7 +14,10 @@ async function ensureDatabase(): Promise<void> {
 }
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: true,
+  credentials: true,
+}));
 app.use(express.json());
 
 // Request logging
@@ -31,7 +34,8 @@ app.use(async (req, res, next) => {
         next();
     } catch (error) {
         console.error('Database connection failed:', error);
-        res.status(503).json({ error: 'Database unavailable' });
+        const message = error instanceof Error ? error.message : 'Database unavailable';
+        res.status(503).json({ error: message });
     }
 });
 
