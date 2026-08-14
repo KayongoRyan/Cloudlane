@@ -1,6 +1,13 @@
 import { v4 as uuidv4 } from 'uuid';
 import { MongoClient, Db, Collection } from 'mongodb';
+import dns from 'node:dns';
 import config from './config';
+
+try {
+  dns.setDefaultResultOrder('ipv4first');
+} catch {
+  /* older Node */
+}
 
 export type TenantTier = 'free' | 'pro' | 'enterprise';
 export type TenantStatus = 'active' | 'suspended' | 'deleted';
@@ -98,12 +105,17 @@ export async function initializeDatabase(): Promise<void> {
 
   try {
     client = new MongoClient(url, {
-      serverSelectionTimeoutMS: 5000,
-      connectTimeoutMS: 5000,
-      socketTimeoutMS: 8000,
+      serverSelectionTimeoutMS: 4000,
+      connectTimeoutMS: 4000,
+      socketTimeoutMS: 4000,
       family: 4,
     });
-    await client.connect();
+    await Promise.race([
+      client.connect(),
+      new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('MongoDB connect timed out. Check Atlas Network Access (0.0.0.0/0) and DATABASE_URL.')), 4500);
+      }),
+    ]);
     db = client.db();
 
     tenantsCol = db.collection('tenants');

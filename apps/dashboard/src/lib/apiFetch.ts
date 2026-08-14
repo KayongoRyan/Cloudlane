@@ -3,7 +3,7 @@ import { getApiBase } from './api'
 export async function apiFetch(path: string, init?: RequestInit): Promise<Response> {
   const apiBase = getApiBase()
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 20000)
+  const timeout = setTimeout(() => controller.abort(), 12000)
 
   try {
     return await fetch(`${apiBase}${path}`, { ...init, signal: controller.signal })

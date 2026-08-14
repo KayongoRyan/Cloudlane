@@ -68,12 +68,23 @@ app.get('/', (_req, res) => {
 
 // Health check
 app.get('/health', (_req, res) => {
-    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+    const url = process.env.DATABASE_URL || '';
+    res.json({
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      hasDatabaseUrl: Boolean(url),
+      database: url.includes('mongodb.net') ? 'atlas' : url.includes('localhost') ? 'localhost' : url ? 'other' : 'missing',
+    });
 });
 
 app.get('/health/db', async (_req, res) => {
     try {
-        await ensureDatabase();
+        await Promise.race([
+          ensureDatabase(),
+          new Promise((_, reject) => {
+            setTimeout(() => reject(new Error('Database ping timed out')), 5000);
+          }),
+        ]);
         res.json({ status: 'ok', database: 'connected' });
     } catch (error) {
         const message = error instanceof Error ? error.message : 'Database unavailable';
