@@ -27,13 +27,7 @@ Do **not** use `npm run dev` — that is local development only.
 
 Optional: `JWT_EXPIRES_IN` = `24h`
 
-**Example `DATABASE_URL` format** (replace user/password/host from Atlas → Connect → Drivers):
-
-```
-mongodb+srv://cloudlane:YOUR_PASSWORD@cluster0.xxxxx.mongodb.net/cloudlane?retryWrites=true&w=majority&appName=Cluster0
-```
-
-If the password contains `#`, encode it as `%23` in the URL.
+Build `DATABASE_URL` in the Atlas UI (**Connect → Drivers**): use your cluster hostname, database user, and password. URL-encode special characters in the password (e.g. `#` → `%23`). **Never commit the real connection string** — set it only in Netlify env vars and local `apps/api/.env` (gitignored).
 
 After deploy, copy your site URL (e.g. `https://your-api.netlify.app`) and set on the **dashboard** (Vercel):
 
