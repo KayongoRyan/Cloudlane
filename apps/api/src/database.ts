@@ -82,6 +82,8 @@ function mapDeployment(doc: any): DeploymentRecord {
 }
 
 export async function initializeDatabase(): Promise<void> {
+  if (client) return;
+
   const url = config.databaseUrl;
   if (!url || !url.startsWith('mongodb')) {
     throw new Error('DATABASE_URL must be a mongodb:// URL when using MongoDB backend');

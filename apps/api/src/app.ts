@@ -2,8 +2,16 @@ import express from 'express';
 import cors from 'cors';
 import authRoutes from './routes/auth';
 import deploymentRoutes from './routes/deployments';
+import { initializeDatabase } from './database';
 
 const app = express();
+
+let dbReady: Promise<void> | null = null;
+
+async function ensureDatabase(): Promise<void> {
+  if (!dbReady) dbReady = initializeDatabase();
+  return dbReady;
+}
 
 // Middleware
 app.use(cors());
@@ -13,6 +21,18 @@ app.use(express.json());
 app.use((req, _res, next) => {
     console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
     next();
+});
+
+// MongoDB (required for serverless cold starts; no-op if already connected)
+app.use(async (req, res, next) => {
+    if (req.path === '/health') return next();
+    try {
+        await ensureDatabase();
+        next();
+    } catch (error) {
+        console.error('Database connection failed:', error);
+        res.status(503).json({ error: 'Database unavailable' });
+    }
 });
 
 // Routes
