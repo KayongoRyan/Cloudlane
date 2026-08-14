@@ -4,6 +4,9 @@ services:
     container_name: cloudlane-mongo
     ports:
       - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: cloudlane
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
     volumes:
       - cloudlane_mongo_data:/data/db
 
