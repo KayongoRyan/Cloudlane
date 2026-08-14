@@ -1,17 +1,28 @@
-/** Netlify production API — update if your Netlify site URL changes. */
+/** Netlify production API */
 export const PRODUCTION_API_URL = 'https://comfy-starlight-51c0e7.netlify.app'
+
+function isLocalHost(): boolean {
+  if (typeof window === 'undefined') return false
+  const host = window.location.hostname
+  return host === 'localhost' || host === '127.0.0.1'
+}
 
 /** Public API base URL (no trailing slash). */
 export function getApiBase(): string {
-  const fromEnv = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '')
-  if (fromEnv && !fromEnv.includes('localhost')) return fromEnv
-
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname
-    if (host.includes('vercel.app') || host.includes('cloudlane-dashboard')) {
-      return PRODUCTION_API_URL
-    }
+  // Production / preview hosts always use Netlify (works even if build env was wrong)
+  if (typeof window !== 'undefined' && !isLocalHost()) {
+    return PRODUCTION_API_URL
   }
 
-  return fromEnv || 'http://localhost:3001'
+  const fromEnv = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '')
+  if (fromEnv) return fromEnv
+
+  return 'http://localhost:3001'
+}
+
+export function apiReachabilityHint(apiBase: string): string {
+  if (apiBase.includes('localhost')) {
+    return 'Start MongoDB (docker compose up -d) and the API (cd apps/api && npm run dev).'
+  }
+  return 'Check that the API is deployed on Netlify and DATABASE_URL is set.'
 }
