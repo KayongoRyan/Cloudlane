@@ -39,7 +39,8 @@ router.post('/register', async (req, res) => {
       return res.status(409).json({ error: 'A user with this email already exists' });
     }
     console.error('Registration failed:', error);
-    return res.status(500).json({ error: 'Unable to create account' });
+    const detail = error instanceof Error ? error.message : 'Unable to create account';
+    return res.status(500).json({ error: detail });
   }
 });
 
@@ -86,7 +87,8 @@ router.post('/login', async (req, res) => {
     return res.json({ token });
   } catch (error) {
     console.error('Login failed:', error);
-    return res.status(500).json({ error: 'Unable to sign in' });
+    const detail = error instanceof Error ? error.message : 'Unable to sign in';
+    return res.status(500).json({ error: detail });
   }
 });
 

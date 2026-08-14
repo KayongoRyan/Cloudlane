@@ -82,7 +82,7 @@ function mapDeployment(doc: any): DeploymentRecord {
 }
 
 export async function initializeDatabase(): Promise<void> {
-  if (client) return;
+  if (client && usersCol) return;
 
   const url = config.databaseUrl;
   if (!url || !url.startsWith('mongodb')) {
@@ -96,26 +96,41 @@ export async function initializeDatabase(): Promise<void> {
     throw new Error('DATABASE_URL cannot point to localhost on Netlify. Use MongoDB Atlas.');
   }
 
-  client = new MongoClient(url, {
-    serverSelectionTimeoutMS: 8000,
-    connectTimeoutMS: 8000,
-  });
-  await client.connect();
-  db = client.db();
+  try {
+    client = new MongoClient(url, {
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 5000,
+      socketTimeoutMS: 8000,
+      family: 4,
+    });
+    await client.connect();
+    db = client.db();
 
-  tenantsCol = db.collection('tenants');
-  usersCol = db.collection('users');
-  deploymentsCol = db.collection('deployments');
-  apiKeysCol = db.collection('api_keys');
+    tenantsCol = db.collection('tenants');
+    usersCol = db.collection('users');
+    deploymentsCol = db.collection('deployments');
+    apiKeysCol = db.collection('api_keys');
 
-  // Create indexes similar to SQL constraints
-  await tenantsCol.createIndex({ slug: 1 }, { unique: true });
-  await usersCol.createIndex({ email: 1 }, { unique: true });
-  await apiKeysCol.createIndex({ prefix: 1 });
-  await deploymentsCol.createIndex({ subdomain: 1 }, { unique: true });
-  await usersCol.createIndex({ tenantId: 1 });
-  await apiKeysCol.createIndex({ tenantId: 1 });
-  await deploymentsCol.createIndex({ tenantId: 1 });
+    // Indexes on every cold start make Netlify functions time out — skip in serverless.
+    if (!config.isNetlify) {
+      await tenantsCol.createIndex({ slug: 1 }, { unique: true });
+      await usersCol.createIndex({ email: 1 }, { unique: true });
+      await apiKeysCol.createIndex({ prefix: 1 });
+      await deploymentsCol.createIndex({ subdomain: 1 }, { unique: true });
+      await usersCol.createIndex({ tenantId: 1 });
+      await apiKeysCol.createIndex({ tenantId: 1 });
+      await deploymentsCol.createIndex({ tenantId: 1 });
+    }
+  } catch (err) {
+    try { await client?.close(); } catch { /* ignore */ }
+    client = null;
+    db = null;
+    tenantsCol = null;
+    usersCol = null;
+    deploymentsCol = null;
+    apiKeysCol = null;
+    throw err;
+  }
 }
 
 export async function closeDatabase(): Promise<void> {

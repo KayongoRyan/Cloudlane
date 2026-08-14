@@ -10,7 +10,7 @@ export async function apiFetch(path: string, init?: RequestInit): Promise<Respon
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') {
       throw new Error(
-        `API request timed out. On Netlify, set DATABASE_URL (MongoDB Atlas) and JWT_SECRET, then redeploy.`
+        `API request timed out. Confirm Netlify DATABASE_URL is the Atlas URI, JWT_SECRET is set, Atlas Network Access allows 0.0.0.0/0, then Trigger deploy.`
       )
     }
     throw err

@@ -9,14 +9,30 @@ const app = express();
 let dbReady: Promise<void> | null = null;
 
 async function ensureDatabase(): Promise<void> {
-  if (!dbReady) dbReady = initializeDatabase();
+  if (!dbReady) {
+    dbReady = initializeDatabase().catch((err) => {
+      dbReady = null;
+      throw err;
+    });
+  }
   return dbReady;
 }
 
 // Middleware
 app.use(cors({
-  origin: true,
-  credentials: true,
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (
+      origin === 'https://cloudlane-dashboard.vercel.app' ||
+      origin.endsWith('.vercel.app') ||
+      origin.startsWith('http://localhost:') ||
+      origin.startsWith('http://127.0.0.1:')
+    ) {
+      return callback(null, true);
+    }
+    return callback(null, false);
+  },
+  credentials: false,
 }));
 app.use(express.json());
 
@@ -28,7 +44,9 @@ app.use((req, _res, next) => {
 
 // MongoDB (required for serverless cold starts; no-op if already connected)
 app.use(async (req, res, next) => {
-    if (req.path === '/health') return next();
+    if (req.method === 'OPTIONS' || req.path === '/health' || req.path.startsWith('/health/')) {
+      return next();
+    }
     try {
         await ensureDatabase();
         next();
@@ -51,6 +69,16 @@ app.get('/', (_req, res) => {
 // Health check
 app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.get('/health/db', async (_req, res) => {
+    try {
+        await ensureDatabase();
+        res.json({ status: 'ok', database: 'connected' });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Database unavailable';
+        res.status(503).json({ status: 'error', database: 'disconnected', error: message });
+    }
 });
 
 // Error handling middleware
