@@ -50,7 +50,7 @@ Keep only **cloudlane-dashboard** on Vercel.
 
 Set on **cloudlane-dashboard**:
 
-- `NEXT_PUBLIC_API_URL` — your Netlify API URL (no trailing slash)
+- `NEXT_PUBLIC_API_URL` — your Netlify API URL (no trailing slash), e.g. `https://comfy-starlight-51c0e7.netlify.app`
 
 After changing this variable, **redeploy the dashboard** — Next.js bakes it in at build time.
 
