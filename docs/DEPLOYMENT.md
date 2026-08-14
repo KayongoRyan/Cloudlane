@@ -27,12 +27,18 @@ To get a fresh **success** status on GitHub for the API:
 
 Set these on the **cloudlane-api** project:
 
-- `DATABASE_URL` — MongoDB connection string (e.g. MongoDB Atlas)
+- `DATABASE_URL` — MongoDB Atlas connection string (not `localhost`)
 - `JWT_SECRET` — signing secret for auth tokens
+
+Also disable **Deployment Protection** on the API project (Settings → Deployment Protection) so the public dashboard can call it.
 
 ## Required Vercel env vars (dashboard)
 
+Set on **cloudlane-dashboard** (or use `apps/dashboard/vercel.json`):
+
 - `NEXT_PUBLIC_API_URL` — public URL of the deployed API (no trailing slash)
+
+After changing this variable, **redeploy the dashboard** — Next.js bakes it in at build time.
 
 ## Local vs production
 

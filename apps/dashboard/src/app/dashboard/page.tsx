@@ -4,6 +4,7 @@ import { CSSProperties, FormEvent, useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import Logo from '../../components/Logo'
+import { getApiBase } from '../../lib/api'
 
 interface Deployment {
   id: string
@@ -15,8 +16,7 @@ interface Deployment {
   createdAt?: string
 }
 
-const apiBase = () =>
-  (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/+$/, '')
+const apiBase = () => getApiBase()
 
 export default function Dashboard() {
   const router = useRouter()

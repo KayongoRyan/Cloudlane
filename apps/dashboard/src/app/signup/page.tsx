@@ -4,6 +4,7 @@ import { FormEvent, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import Logo from '../../components/Logo'
+import { getApiBase } from '../../lib/api'
 
 export default function SignupPage() {
   const [email, setEmail] = useState('')
@@ -19,7 +20,7 @@ export default function SignupPage() {
     setError('')
     setLoading(true)
 
-    const apiBase = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001').replace(/\/+$/, '')
+    const apiBase = getApiBase()
 
     try {
       const res = await fetch(`${apiBase}/api/auth/register`, {
@@ -44,7 +45,7 @@ export default function SignupPage() {
       router.push('/dashboard')
     } catch (err: any) {
       if (err instanceof TypeError && err.message === 'Failed to fetch') {
-        setError(`Cannot reach the API at ${apiBase}. Start MongoDB and the API.`)
+        setError(`Cannot reach the API at ${apiBase}. Check that the API is deployed and NEXT_PUBLIC_API_URL is set.`)
         return
       }
       setError(err.message || 'Unable to create account')
