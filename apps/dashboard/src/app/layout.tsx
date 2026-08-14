@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Syne, DM_Sans } from 'next/font/google'
 import './globals.css'
 
@@ -17,6 +17,12 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: 'Cloudlane',
   description: 'Deploy a container, get a live URL. Pay only for what you use.',
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
 }
 
 export default function RootLayout({
