@@ -302,6 +302,86 @@ export default function Dashboard() {
         </section>
       </main>
 
+      <footer className="cl-footer">
+        <div className="cl-footer-glow" aria-hidden="true" />
+        <div className="cl-section-inner cl-footer-inner">
+          <div className="cl-footer-brand">
+            <a href="#overview" className="cl-footer-logo" onClick={() => setNavOpen(false)}>
+              <Logo size="md" />
+            </a>
+            <p className="cl-footer-tagline">
+              Deploy Faster. Scale Smarter. Build Without Limits.
+            </p>
+            <button type="button" className="cl-footer-cta" onClick={() => setShowDeployForm(true)}>
+              Start a deploy
+            </button>
+          </div>
+
+          <div className="cl-footer-cols">
+            <div className="cl-footer-col">
+              <h3>Products</h3>
+              <ul>
+                <li><a href="#products">Container deploy</a></li>
+                <li><a href="#products">Live URLs</a></li>
+                <li><a href="#products">Scale to zero</a></li>
+                <li><a href="#credits">Per-second billing</a></li>
+                <li><a href="#products">Cloudlane CLI</a></li>
+                <li><a href="#products">Managed ingress</a></li>
+              </ul>
+            </div>
+
+            <div className="cl-footer-col">
+              <h3>Solutions</h3>
+              <ul>
+                <li><a href="#solutions">API backends</a></li>
+                <li><a href="#solutions">Startup runway</a></li>
+                <li><a href="#solutions">Staging & previews</a></li>
+                <li><a href="#solutions">Cost envelopes</a></li>
+                <li><a href="#solutions">Multi-tenant SaaS</a></li>
+                <li><a href="#solutions">Wake-on-request workers</a></li>
+              </ul>
+            </div>
+
+            <div className="cl-footer-col">
+              <h3>Resources</h3>
+              <ul>
+                <li><a href="#overview">What is Cloudlane?</a></li>
+                <li><a href="#products">Quickstart</a></li>
+                <li><a href="#solutions">Architecture notes</a></li>
+                <li><a href="#credits">Pricing model</a></li>
+                <li><a href="https://github.com/KayongoRyan/Cloudlane" target="_blank" rel="noreferrer">GitHub</a></li>
+                <li><a href="https://comfy-starlight-51c0e7.netlify.app/health" target="_blank" rel="noreferrer">System status</a></li>
+              </ul>
+            </div>
+
+            <div className="cl-footer-col">
+              <h3>Developers</h3>
+              <ul>
+                <li><button type="button" onClick={() => setShowDeployForm(true)}>Open console</button></li>
+                <li><a href="#products">CLI reference</a></li>
+                <li><a href="https://comfy-starlight-51c0e7.netlify.app/" target="_blank" rel="noreferrer">Control plane API</a></li>
+                <li><a href="https://github.com/KayongoRyan/Cloudlane" target="_blank" rel="noreferrer">Code samples</a></li>
+                <li><a href="#solutions">Deploy intelligence</a></li>
+                <li><button type="button" onClick={() => setShowDeployForm(true)}>Support</button></li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="cl-footer-base">
+            <p className="cl-footer-copy">© {new Date().getFullYear()} Cloudlane. Built for deploy → URL → scale-to-zero.</p>
+            <div className="cl-footer-legal">
+              <a href="#overview">Privacy</a>
+              <a href="#overview">Terms</a>
+              <a href="#credits">Pricing</a>
+              <span className="cl-footer-status">
+                <span className="cl-footer-status-dot" aria-hidden="true" />
+                All systems nominal
+              </span>
+            </div>
+          </div>
+        </div>
+      </footer>
+
       <button type="button" className="gcp-chat" aria-label="Support chat" onClick={() => setShowDeployForm(true)}>
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
           <path
