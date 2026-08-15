@@ -5,8 +5,31 @@ import config from './config';
 
 try {
   dns.setDefaultResultOrder('ipv4first');
+  dns.setServers(['8.8.8.8', '1.1.1.1', '9.9.9.9']);
 } catch {
   /* older Node */
+}
+
+/** Skip mongodb+srv SRV lookup — it hangs on Netlify/AWS and 502s the function. */
+function toDirectMongoUrl(url: string): string {
+  if (!url.startsWith('mongodb+srv://')) return url;
+  try {
+    const parsed = new URL(url.replace('mongodb+srv://', 'https://'));
+    const user = parsed.username;
+    const pass = parsed.password;
+    const dbName = parsed.pathname.replace(/^\//, '') || 'cloudlane';
+    if (!parsed.hostname.endsWith('3dn8fdi.mongodb.net')) return url;
+
+    const hosts = [
+      'ac-eqdfsxk-shard-00-00.3dn8fdi.mongodb.net:27017',
+      'ac-eqdfsxk-shard-00-01.3dn8fdi.mongodb.net:27017',
+      'ac-eqdfsxk-shard-00-02.3dn8fdi.mongodb.net:27017',
+    ].join(',');
+
+    return `mongodb://${user}:${pass}@${hosts}/${dbName}?ssl=true&retryWrites=true&w=majority&authSource=admin`;
+  } catch {
+    return url;
+  }
 }
 
 export type TenantTier = 'free' | 'pro' | 'enterprise';
@@ -91,7 +114,7 @@ function mapDeployment(doc: any): DeploymentRecord {
 export async function initializeDatabase(): Promise<void> {
   if (client && usersCol) return;
 
-  const url = config.databaseUrl;
+  const url = toDirectMongoUrl(config.databaseUrl);
   if (!url || !url.startsWith('mongodb')) {
     const hint = config.isNetlify
       ? 'Set DATABASE_URL in Netlify → Environment variables (MongoDB Atlas URI).'

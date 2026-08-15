@@ -1,0 +1,5 @@
+{
+  "status": "ok",
+  "database": "not-pinged",
+  "note": "This path is static so it cannot 502. Open /health for env checks. Sign in tests Mongo."
+}

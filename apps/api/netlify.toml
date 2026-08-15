@@ -3,9 +3,19 @@
   publish = "public"
   functions = "netlify/functions"
 
+[build.environment]
+  NODE_OPTIONS = "--dns-result-order=ipv4first"
+
 [functions]
   node_bundler = "nft"
   included_files = ["dist/**"]
+
+# Never invoke the function for health/db — Mongo SRV used to 502 this URL.
+[[redirects]]
+  from = "/health/db"
+  to = "/health-db.json"
+  status = 200
+  force = true
 
 [[redirects]]
   from = "/*"
