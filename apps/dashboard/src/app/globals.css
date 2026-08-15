@@ -534,18 +534,18 @@ button {
 
 /* ——— Floating product showcase (panoramic cylindrical arc) ——— */
 .hero-showcase {
-  --radius: clamp(540px, 78vw, 920px);
-  --step: 14;
-  --card-w: clamp(138px, 10.5vw, 162px);
-  --card-h: clamp(188px, 18vw, 228px);
+  --radius: clamp(420px, 58vw, 640px);
+  --step: 15;
+  --card-w: clamp(124px, 8.5vw, 142px);
+  --card-h: clamp(168px, 15vw, 196px);
   width: 100%;
-  margin: clamp(2rem, 6vh, 5rem) 0 0;
+  margin: clamp(1.5rem, 4vh, 3.5rem) 0 0;
   animation: gcp-rise 0.7s 0.12s ease-out both;
 }
 
 .hero-showcase-scene {
   position: relative;
-  height: clamp(280px, 34vw, 360px);
+  height: clamp(230px, 26vw, 290px);
   perspective: 1800px;
   perspective-origin: 50% 55%;
   overflow: hidden;
@@ -568,8 +568,8 @@ button {
   width: var(--card-w);
   height: var(--card-h);
   margin: calc(var(--card-h) / -2) 0 0 calc(var(--card-w) / -2);
-  padding: 0.95rem 1rem;
-  border-radius: 22px;
+  padding: 0.75rem 0.8rem;
+  border-radius: 18px;
   background: #fff;
   border: none;
   box-shadow: 0 24px 50px rgba(28, 30, 26, 0.16);
@@ -583,7 +583,7 @@ button {
   transform:
     rotateY(calc(var(--offset) * var(--step) * 1deg))
     translateZ(var(--radius))
-    scale(calc(1.1 - abs(var(--offset)) * 0.055));
+    scale(calc(1.02 - abs(var(--offset)) * 0.045));
   opacity: calc(1 - abs(var(--offset)) * 0.05);
   z-index: calc(10 - abs(var(--offset)));
 }
@@ -627,7 +627,7 @@ button {
 .hero-card--url .hero-card-url {
   margin: 0;
   font-family: var(--font-display), "Syne", sans-serif;
-  font-size: 0.92rem;
+  font-size: 0.82rem;
   font-weight: 700;
   letter-spacing: -0.02em;
   word-break: break-all;
@@ -669,7 +669,7 @@ button {
 }
 
 .hero-card-meters strong {
-  font-size: 1.35rem;
+  font-size: 1.1rem;
   font-family: var(--font-display), "Syne", sans-serif;
   color: var(--cl-ink);
 }
@@ -688,7 +688,7 @@ button {
 .hero-card--bill .hero-card-stat {
   margin: 0;
   font-family: var(--font-display), "Syne", sans-serif;
-  font-size: 1.45rem;
+  font-size: 1.2rem;
   font-weight: 800;
   letter-spacing: -0.03em;
 }
@@ -767,14 +767,14 @@ button {
 
 @media (max-width: 1024px) {
   .hero-showcase {
-    --radius: clamp(420px, 68vw, 640px);
+    --radius: clamp(380px, 60vw, 520px);
     --step: 16;
-    --card-w: clamp(128px, 14vw, 150px);
-    --card-h: clamp(176px, 22vw, 210px);
+    --card-w: clamp(118px, 12vw, 136px);
+    --card-h: clamp(160px, 20vw, 188px);
   }
 
   .hero-showcase-scene {
-    height: clamp(250px, 38vw, 320px);
+    height: clamp(220px, 32vw, 270px);
   }
 
   .cl-product-grid,
@@ -876,8 +876,8 @@ button {
     position: relative;
     top: auto;
     left: auto;
-    width: min(230px, 76vw);
-    height: 210px;
+    width: min(200px, 72vw);
+    height: 188px;
     margin: 0;
     flex-shrink: 0;
     scroll-snap-align: center;
@@ -887,8 +887,8 @@ button {
   }
 
   .hero-card--center {
-    width: min(250px, 82vw);
-    height: 226px;
+    width: min(216px, 78vw);
+    height: 200px;
   }
 }
 
