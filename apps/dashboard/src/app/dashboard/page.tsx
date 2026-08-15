@@ -126,7 +126,8 @@ export default function Dashboard() {
 
         <nav className="hero-sky-nav" aria-label="Main">
           <a href="#overview" onClick={() => setNavOpen(false)}>Overview</a>
-          <a href="#platform" onClick={() => setNavOpen(false)}>Platform</a>
+          <a href="#products" onClick={() => setNavOpen(false)}>Products</a>
+          <a href="#solutions" onClick={() => setNavOpen(false)}>Solutions</a>
           <a href="#credits" onClick={() => setNavOpen(false)}>Pricing</a>
         </nav>
 
@@ -217,7 +218,7 @@ export default function Dashboard() {
       </section>
 
       <main>
-        <section className="cl-products" id="platform">
+        <section className="cl-products" id="products">
           <div className="cl-section-inner">
             <h2 className="cl-section-title">Everything you need to ship a container</h2>
             <div className="cl-product-grid">
@@ -246,7 +247,7 @@ export default function Dashboard() {
           </div>
         </section>
 
-        <section className="cl-innovate" id="intelligence">
+        <section className="cl-innovate" id="solutions">
           <div className="cl-section-inner">
             <p className="gcp-kicker">Intelligence</p>
             <h2 className="cl-section-title">The control plane thinks with you</h2>
