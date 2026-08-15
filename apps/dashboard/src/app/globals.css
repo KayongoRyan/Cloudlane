@@ -504,18 +504,21 @@ button {
 
 .hero-sky-title {
   margin: 16px 0 0;
+  width: 100%;
   font-family: var(--font-display), "Syne", sans-serif;
-  font-size: clamp(2.15rem, 11.5vw, 9.5rem);
+  font-size: clamp(2.2rem, 7.2vw, 6.25rem);
   font-weight: 800;
-  letter-spacing: -0.055em;
-  line-height: 0.92;
+  letter-spacing: -0.045em;
+  line-height: 1;
   color: #12140f;
-  max-width: 100%;
-  overflow-wrap: anywhere;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
 }
 
 .hero-sky-title-fill {
   display: inline-block;
+  white-space: nowrap;
 }
 
 .hero-sky-lede {
@@ -896,6 +899,7 @@ button {
   }
 
   .hero-sky-title {
+    font-size: clamp(1.85rem, 11vw, 2.6rem);
     letter-spacing: -0.04em;
   }
 
