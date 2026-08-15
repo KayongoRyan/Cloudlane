@@ -10,7 +10,8 @@ interface Deployment {
   id: string
   name: string
   image: string
-  subdomain: string
+  publicUrl?: string
+  subdomain?: string
   status: string
   port: number
   createdAt?: string

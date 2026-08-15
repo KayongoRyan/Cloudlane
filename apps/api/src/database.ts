@@ -1,5 +1,4 @@
-import { v4 as uuidv4 } from 'uuid';
-import { MongoClient, Db, Collection } from 'mongodb';
+import { MongoClient, Db, Collection, ObjectId } from 'mongodb';
 import dns from 'node:dns';
 import config from './config';
 
@@ -35,15 +34,33 @@ function toDirectMongoUrl(url: string): string {
 export type TenantTier = 'free' | 'pro' | 'enterprise';
 export type TenantStatus = 'active' | 'suspended' | 'deleted';
 export type UserRole = 'admin' | 'developer' | 'viewer';
+export type UserStatus = 'active' | 'invited' | 'disabled';
 export type DeploymentStatus = 'pending' | 'deploying' | 'running' | 'stopped' | 'failed';
 
+export interface TenantLimits {
+  maxDeployments: number;
+  maxCpu: number;
+  maxMemoryMb: number;
+  maxInstances: number;
+}
+
+export const DEFAULT_TENANT_LIMITS: TenantLimits = {
+  maxDeployments: 8,
+  maxCpu: 1,
+  maxMemoryMb: 512,
+  maxInstances: 3,
+};
+
+/** API-facing records — `_id` and FKs are ObjectId hex strings. */
 export interface TenantRecord {
   id: string;
-  name: string;
   slug: string;
-  ownerId: string | null;
-  tier: TenantTier;
+  name: string;
   status: TenantStatus;
+  tier: TenantTier;
+  limits: TenantLimits;
+  irembopayCustomerId: string | null;
+  createdAt: Date;
 }
 
 export interface UserRecord {
@@ -52,29 +69,60 @@ export interface UserRecord {
   email: string;
   passwordHash: string;
   role: UserRole;
+  status: UserStatus;
+  createdAt: Date;
 }
 
 export interface DeploymentRecord {
   id: string;
   tenantId: string;
   name: string;
+  slug: string;
   image: string;
-  port: number;
-  subdomain: string;
+  cpu: number;
+  memory: number;
+  minInstances: number;
+  maxInstances: number;
   status: DeploymentStatus;
-  scaleToZero: boolean;
-  minReplicas: number;
-  maxReplicas: number;
-  currentReplicas: number;
-  kubernetesNamespace: string;
-  environment: Record<string, string>;
+  publicUrl: string;
+  k8sNamespace: string;
+  port: number;
+  deletedAt: Date | null;
+  createdAt: Date;
 }
 
-interface ApiKeyRecord {
+export interface ApiKeyRecord {
   id: string;
   tenantId: string;
+  userId: string;
+  name: string;
   keyHash: string;
   prefix: string;
+  scopes: string[];
+  expiresAt: Date | null;
+  lastUsedAt: Date | null;
+}
+
+export interface AuditLogRecord {
+  id: string;
+  tenantId: string;
+  userId: string | null;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  changes: Record<string, unknown>;
+  ipAddress: string | null;
+  createdAt: Date;
+}
+
+export interface UsageMetricRecord {
+  id: string;
+  tenantId: string;
+  deploymentId: string;
+  metricType: string;
+  value: number;
+  windowStart: Date;
+  windowEnd: Date;
 }
 
 let client: MongoClient | null = null;
@@ -84,31 +132,139 @@ let tenantsCol: Collection | null = null;
 let usersCol: Collection | null = null;
 let deploymentsCol: Collection | null = null;
 let apiKeysCol: Collection | null = null;
+let auditLogsCol: Collection | null = null;
+let usageMetricsCol: Collection | null = null;
+
+export function isObjectIdString(value: string): boolean {
+  return ObjectId.isValid(value) && String(new ObjectId(value)) === value;
+}
+
+function asObjectId(value: string): ObjectId {
+  return new ObjectId(value);
+}
+
+function oidOrRaw(value: string): ObjectId | string {
+  return isObjectIdString(value) ? asObjectId(value) : value;
+}
+
+/** Match both new ObjectId FKs and legacy UUID-string FKs. */
+function tenantClause(tenantId: string): { tenantId: { $in: Array<ObjectId | string> } } {
+  const vals: Array<ObjectId | string> = [tenantId];
+  if (isObjectIdString(tenantId)) vals.push(asObjectId(tenantId));
+  return { tenantId: { $in: vals } };
+}
+
+function idOf(doc: { _id: ObjectId }): string {
+  return doc._id.toHexString();
+}
+
+function refStr(value: unknown): string {
+  if (value instanceof ObjectId) return value.toHexString();
+  return value != null ? String(value) : '';
+}
+
+function mapLimits(raw: unknown): TenantLimits {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Partial<TenantLimits>;
+  return {
+    maxDeployments: o.maxDeployments ?? DEFAULT_TENANT_LIMITS.maxDeployments,
+    maxCpu: o.maxCpu ?? DEFAULT_TENANT_LIMITS.maxCpu,
+    maxMemoryMb: o.maxMemoryMb ?? DEFAULT_TENANT_LIMITS.maxMemoryMb,
+    maxInstances: o.maxInstances ?? DEFAULT_TENANT_LIMITS.maxInstances,
+  };
+}
 
 function mapTenant(doc: any): TenantRecord {
-  return { id: doc.id, name: doc.name, slug: doc.slug, ownerId: doc.ownerId ?? null, tier: doc.tier, status: doc.status };
+  return {
+    id: idOf(doc),
+    slug: doc.slug,
+    name: doc.name,
+    status: doc.status,
+    tier: doc.tier,
+    limits: mapLimits(doc.limits),
+    irembopayCustomerId: doc.irembopayCustomerId ?? null,
+    createdAt: doc.createdAt ?? new Date(0),
+  };
 }
 
 function mapUser(doc: any): UserRecord {
-  return { id: doc.id, tenantId: doc.tenantId, email: doc.email, passwordHash: doc.passwordHash, role: doc.role };
+  return {
+    id: idOf(doc),
+    tenantId: refStr(doc.tenantId),
+    email: doc.email,
+    passwordHash: doc.passwordHash,
+    role: doc.role,
+    status: doc.status ?? 'active',
+    createdAt: doc.createdAt ?? new Date(0),
+  };
 }
 
 function mapDeployment(doc: any): DeploymentRecord {
+  const slug = doc.slug || doc.name;
+  const publicUrl =
+    doc.publicUrl ||
+    (doc.subdomain ? `https://${doc.subdomain}.${config.baseDomain}` : '');
   return {
-    id: doc.id,
-    tenantId: doc.tenantId,
+    id: idOf(doc),
+    tenantId: refStr(doc.tenantId),
     name: doc.name,
+    slug,
     image: doc.image,
-    port: doc.port,
-    subdomain: doc.subdomain,
+    cpu: doc.cpu ?? 0.5,
+    memory: doc.memory ?? 256,
+    minInstances: doc.minInstances ?? doc.minReplicas ?? 0,
+    maxInstances: doc.maxInstances ?? doc.maxReplicas ?? 3,
     status: doc.status,
-    scaleToZero: doc.scaleToZero,
-    minReplicas: doc.minReplicas,
-    maxReplicas: doc.maxReplicas,
-    currentReplicas: doc.currentReplicas,
-    kubernetesNamespace: doc.kubernetesNamespace,
-    environment: doc.environment || {},
+    publicUrl,
+    k8sNamespace: doc.k8sNamespace || doc.kubernetesNamespace || '',
+    port: doc.port ?? 8080,
+    deletedAt: doc.deletedAt ?? null,
+    createdAt: doc.createdAt ?? new Date(0),
   };
+}
+
+function mapApiKey(doc: any): ApiKeyRecord {
+  return {
+    id: idOf(doc),
+    tenantId: refStr(doc.tenantId),
+    userId: refStr(doc.userId),
+    name: doc.name || 'default',
+    keyHash: doc.keyHash,
+    prefix: doc.prefix,
+    scopes: Array.isArray(doc.scopes) ? doc.scopes : ['deploy', 'read'],
+    expiresAt: doc.expiresAt ?? null,
+    lastUsedAt: doc.lastUsedAt ?? null,
+  };
+}
+
+function mapAuditLog(doc: any): AuditLogRecord {
+  return {
+    id: idOf(doc),
+    tenantId: refStr(doc.tenantId),
+    userId: doc.userId ? refStr(doc.userId) : null,
+    action: doc.action,
+    resourceType: doc.resourceType,
+    resourceId: doc.resourceId ? refStr(doc.resourceId) : null,
+    changes: doc.changes && typeof doc.changes === 'object' ? doc.changes : {},
+    ipAddress: doc.ipAddress ?? null,
+    createdAt: doc.createdAt ?? new Date(0),
+  };
+}
+
+function mapUsageMetric(doc: any): UsageMetricRecord {
+  return {
+    id: idOf(doc),
+    tenantId: refStr(doc.tenantId),
+    deploymentId: refStr(doc.deploymentId),
+    metricType: doc.metricType,
+    value: doc.value,
+    windowStart: doc.windowStart,
+    windowEnd: doc.windowEnd,
+  };
+}
+
+function publicApiKey(record: ApiKeyRecord) {
+  const { keyHash: _omit, ...rest } = record;
+  return rest;
 }
 
 export async function initializeDatabase(): Promise<void> {
@@ -145,16 +301,22 @@ export async function initializeDatabase(): Promise<void> {
     usersCol = db.collection('users');
     deploymentsCol = db.collection('deployments');
     apiKeysCol = db.collection('api_keys');
+    auditLogsCol = db.collection('audit_logs');
+    usageMetricsCol = db.collection('usage_metrics');
 
     // Indexes on every cold start make Netlify functions time out — skip in serverless.
     if (!config.isNetlify) {
       await tenantsCol.createIndex({ slug: 1 }, { unique: true });
       await usersCol.createIndex({ email: 1 }, { unique: true });
-      await apiKeysCol.createIndex({ prefix: 1 });
-      await deploymentsCol.createIndex({ subdomain: 1 }, { unique: true });
       await usersCol.createIndex({ tenantId: 1 });
-      await apiKeysCol.createIndex({ tenantId: 1 });
+      await deploymentsCol.createIndex({ publicUrl: 1 }, { unique: true, sparse: true });
+      await deploymentsCol.createIndex({ tenantId: 1, slug: 1 });
       await deploymentsCol.createIndex({ tenantId: 1 });
+      await apiKeysCol.createIndex({ prefix: 1 });
+      await apiKeysCol.createIndex({ tenantId: 1 });
+      await apiKeysCol.createIndex({ userId: 1 });
+      await auditLogsCol.createIndex({ tenantId: 1, createdAt: -1 });
+      await usageMetricsCol.createIndex({ tenantId: 1, deploymentId: 1, windowStart: -1 });
     }
   } catch (err) {
     try { await client?.close(); } catch { /* ignore */ }
@@ -164,6 +326,8 @@ export async function initializeDatabase(): Promise<void> {
     usersCol = null;
     deploymentsCol = null;
     apiKeysCol = null;
+    auditLogsCol = null;
+    usageMetricsCol = null;
     throw err;
   }
 }
@@ -182,69 +346,146 @@ export async function findUserByEmail(email: string): Promise<UserRecord | null>
 
 export async function findUserByIdAndTenant(id: string, tenantId: string): Promise<UserRecord | null> {
   if (!usersCol) throw new Error('DB not initialized');
-  const doc = await usersCol.findOne({ id, tenantId });
-  return doc ? mapUser(doc) : null;
+
+  if (isObjectIdString(id)) {
+    const doc = await usersCol.findOne({ _id: asObjectId(id), ...tenantClause(tenantId) });
+    if (doc) return mapUser(doc);
+  }
+
+  // Legacy UUID `id` field from pre-ERD documents
+  const legacy = await usersCol.findOne({ id, ...tenantClause(tenantId) });
+  return legacy ? mapUser(legacy) : null;
 }
 
 export async function createTenant(name: string, slug: string): Promise<TenantRecord> {
   if (!tenantsCol) throw new Error('DB not initialized');
-  const doc = { id: uuidv4(), name, slug, ownerId: null, tier: 'free', status: 'active' } as any;
-  await tenantsCol.insertOne(doc);
-  return mapTenant(doc);
+  const doc = {
+    slug,
+    name,
+    status: 'active' as TenantStatus,
+    tier: 'free' as TenantTier,
+    limits: { ...DEFAULT_TENANT_LIMITS },
+    irembopayCustomerId: null,
+    createdAt: new Date(),
+  };
+  const result = await tenantsCol.insertOne(doc);
+  return mapTenant({ ...doc, _id: result.insertedId });
 }
 
 export async function createUser(tenantId: string, email: string, passwordHash: string): Promise<UserRecord> {
   if (!usersCol) throw new Error('DB not initialized');
-  const doc = { id: uuidv4(), tenantId, email: email.toLowerCase(), passwordHash, role: 'admin' } as any;
-  await usersCol.insertOne(doc);
-  return mapUser(doc);
-}
-
-export async function setTenantOwner(tenantId: string, ownerId: string): Promise<void> {
-  if (!tenantsCol) throw new Error('DB not initialized');
-  await tenantsCol.updateOne({ id: tenantId }, { $set: { ownerId } });
+  const doc = {
+    tenantId: oidOrRaw(tenantId),
+    email: email.toLowerCase(),
+    passwordHash,
+    role: 'admin' as UserRole,
+    status: 'active' as UserStatus,
+    createdAt: new Date(),
+  };
+  const result = await usersCol.insertOne(doc);
+  return mapUser({ ...doc, _id: result.insertedId });
 }
 
 export async function createUserAndTenant(name: string, slug: string, email: string, passwordHash: string): Promise<UserRecord> {
   if (!tenantsCol || !usersCol) throw new Error('DB not initialized');
 
-  // Standalone Mongo (local docker) has no replica set — skip multi-doc transactions.
-  const tenant = { id: uuidv4(), name, slug, ownerId: null, tier: 'free', status: 'active' } as any;
-  await tenantsCol.insertOne(tenant);
+  const tenant = {
+    slug,
+    name,
+    status: 'active' as TenantStatus,
+    tier: 'free' as TenantTier,
+    limits: { ...DEFAULT_TENANT_LIMITS },
+    irembopayCustomerId: null,
+    createdAt: new Date(),
+  };
+  const tenantResult = await tenantsCol.insertOne(tenant);
 
   try {
     const userDoc = {
-      id: uuidv4(),
-      tenantId: tenant.id,
+      tenantId: tenantResult.insertedId,
       email: email.toLowerCase(),
       passwordHash,
-      role: 'admin',
-    } as any;
-    await usersCol.insertOne(userDoc);
-    await tenantsCol.updateOne({ id: tenant.id }, { $set: { ownerId: userDoc.id } });
-    return mapUser(userDoc);
+      role: 'admin' as UserRole,
+      status: 'active' as UserStatus,
+      createdAt: new Date(),
+    };
+    const userResult = await usersCol.insertOne(userDoc);
+    return mapUser({ ...userDoc, _id: userResult.insertedId });
   } catch (err) {
-    await tenantsCol.deleteOne({ id: tenant.id }).catch(() => undefined);
+    await tenantsCol.deleteOne({ _id: tenantResult.insertedId }).catch(() => undefined);
     throw err;
   }
 }
 
 export async function listDeployments(tenantId: string): Promise<DeploymentRecord[]> {
   if (!deploymentsCol) throw new Error('DB not initialized');
-  const docs = await deploymentsCol.find({ tenantId }).sort({ createdAt: -1 }).toArray();
+  const docs = await deploymentsCol
+    .find({
+      ...tenantClause(tenantId),
+      $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }],
+    })
+    .sort({ createdAt: -1 })
+    .toArray();
   return docs.map(mapDeployment);
 }
 
-export async function createDeployment(input: Omit<DeploymentRecord, 'id'>): Promise<DeploymentRecord> {
+export async function findDeploymentById(id: string, tenantId: string): Promise<DeploymentRecord | null> {
   if (!deploymentsCol) throw new Error('DB not initialized');
-  const doc = { id: uuidv4(), ...input, createdAt: new Date(), updatedAt: new Date() } as any;
-  await deploymentsCol.insertOne(doc);
-  return mapDeployment(doc);
+  if (!isObjectIdString(id)) return null;
+  const doc = await deploymentsCol.findOne({
+    _id: asObjectId(id),
+    ...tenantClause(tenantId),
+    $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }],
+  });
+  return doc ? mapDeployment(doc) : null;
+}
+
+export interface CreateDeploymentInput {
+  tenantId: string;
+  name: string;
+  slug: string;
+  image: string;
+  cpu?: number;
+  memory?: number;
+  minInstances?: number;
+  maxInstances?: number;
+  status: DeploymentStatus;
+  publicUrl: string;
+  k8sNamespace: string;
+  port: number;
+}
+
+export async function createDeployment(input: CreateDeploymentInput): Promise<DeploymentRecord> {
+  if (!deploymentsCol) throw new Error('DB not initialized');
+  const now = new Date();
+  const doc = {
+    tenantId: oidOrRaw(input.tenantId),
+    name: input.name,
+    slug: input.slug,
+    image: input.image,
+    cpu: input.cpu ?? 0.5,
+    memory: input.memory ?? 256,
+    minInstances: input.minInstances ?? 0,
+    maxInstances: input.maxInstances ?? 3,
+    status: input.status,
+    publicUrl: input.publicUrl,
+    k8sNamespace: input.k8sNamespace,
+    port: input.port,
+    deletedAt: null,
+    createdAt: now,
+  };
+  const result = await deploymentsCol.insertOne(doc);
+  return mapDeployment({ ...doc, _id: result.insertedId });
 }
 
 export async function updateDeploymentStatus(id: string, status: DeploymentStatus): Promise<DeploymentRecord> {
   if (!deploymentsCol) throw new Error('DB not initialized');
-  const res = await deploymentsCol.findOneAndUpdate({ id }, { $set: { status, updatedAt: new Date() } }, { returnDocument: 'after' as any });
+  if (!isObjectIdString(id)) throw new Error('Deployment not found');
+  const res = await deploymentsCol.findOneAndUpdate(
+    { _id: asObjectId(id) },
+    { $set: { status } },
+    { returnDocument: 'after' as const }
+  );
   if (!res.value) throw new Error('Deployment not found');
   return mapDeployment(res.value);
 }
@@ -253,11 +494,126 @@ export async function findApiKey(prefix: string, keyHash: string): Promise<ApiKe
   if (!apiKeysCol) throw new Error('DB not initialized');
   const doc = await apiKeysCol.findOne({ prefix, keyHash });
   if (!doc) return null;
-  return { id: doc.id, tenantId: doc.tenantId, keyHash: doc.keyHash, prefix: doc.prefix };
+  if (doc.expiresAt && new Date(doc.expiresAt) < new Date()) return null;
+  return mapApiKey(doc);
 }
 
 export async function markApiKeyUsed(id: string): Promise<void> {
   if (!apiKeysCol) throw new Error('DB not initialized');
-  await apiKeysCol.updateOne({ id }, { $set: { lastUsedAt: new Date() } });
+  if (!isObjectIdString(id)) return;
+  await apiKeysCol.updateOne({ _id: asObjectId(id) }, { $set: { lastUsedAt: new Date() } });
 }
 
+export async function listApiKeys(tenantId: string): Promise<Omit<ApiKeyRecord, 'keyHash'>[]> {
+  if (!apiKeysCol) throw new Error('DB not initialized');
+  const docs = await apiKeysCol.find(tenantClause(tenantId)).sort({ _id: -1 }).toArray();
+  return docs.map((d) => publicApiKey(mapApiKey(d)));
+}
+
+export async function createApiKey(input: {
+  tenantId: string;
+  userId: string;
+  name: string;
+  keyHash: string;
+  prefix: string;
+  scopes: string[];
+  expiresAt: Date | null;
+}): Promise<Omit<ApiKeyRecord, 'keyHash'>> {
+  if (!apiKeysCol) throw new Error('DB not initialized');
+  const doc = {
+    tenantId: oidOrRaw(input.tenantId),
+    userId: oidOrRaw(input.userId),
+    name: input.name,
+    keyHash: input.keyHash,
+    prefix: input.prefix,
+    scopes: input.scopes,
+    expiresAt: input.expiresAt,
+    lastUsedAt: null,
+  };
+  const result = await apiKeysCol.insertOne(doc);
+  return publicApiKey(mapApiKey({ ...doc, _id: result.insertedId }));
+}
+
+export async function deleteApiKey(id: string, tenantId: string): Promise<boolean> {
+  if (!apiKeysCol) throw new Error('DB not initialized');
+  if (!isObjectIdString(id)) return false;
+  const res = await apiKeysCol.deleteOne({ _id: asObjectId(id), ...tenantClause(tenantId) });
+  return res.deletedCount === 1;
+}
+
+export async function writeAuditLog(input: {
+  tenantId: string;
+  userId?: string | null;
+  action: string;
+  resourceType: string;
+  resourceId?: string | null;
+  changes?: Record<string, unknown>;
+  ipAddress?: string | null;
+}): Promise<void> {
+  if (!auditLogsCol) return;
+  try {
+    await auditLogsCol.insertOne({
+      tenantId: oidOrRaw(input.tenantId),
+      userId: input.userId ? oidOrRaw(input.userId) : null,
+      action: input.action,
+      resourceType: input.resourceType,
+      resourceId: input.resourceId && isObjectIdString(input.resourceId) ? asObjectId(input.resourceId) : input.resourceId ?? null,
+      changes: input.changes ?? {},
+      ipAddress: input.ipAddress ?? null,
+      createdAt: new Date(),
+    });
+  } catch (err) {
+    console.error('audit log write failed:', err);
+  }
+}
+
+export async function listAuditLogs(tenantId: string, limit = 50): Promise<AuditLogRecord[]> {
+  if (!auditLogsCol) throw new Error('DB not initialized');
+  const docs = await auditLogsCol
+    .find(tenantClause(tenantId))
+    .sort({ createdAt: -1 })
+    .limit(Math.min(Math.max(limit, 1), 200))
+    .toArray();
+  return docs.map(mapAuditLog);
+}
+
+export async function createUsageMetric(input: {
+  tenantId: string;
+  deploymentId: string;
+  metricType: string;
+  value: number;
+  windowStart: Date;
+  windowEnd: Date;
+}): Promise<UsageMetricRecord> {
+  if (!usageMetricsCol) throw new Error('DB not initialized');
+  const doc = {
+    tenantId: oidOrRaw(input.tenantId),
+    deploymentId: oidOrRaw(input.deploymentId),
+    metricType: input.metricType,
+    value: input.value,
+    windowStart: input.windowStart,
+    windowEnd: input.windowEnd,
+  };
+  const result = await usageMetricsCol.insertOne(doc);
+  return mapUsageMetric({ ...doc, _id: result.insertedId });
+}
+
+export async function listUsageMetrics(
+  tenantId: string,
+  deploymentId?: string,
+  limit = 100
+): Promise<UsageMetricRecord[]> {
+  if (!usageMetricsCol) throw new Error('DB not initialized');
+  const filter: Record<string, unknown> = { ...tenantClause(tenantId) };
+  if (deploymentId) {
+    const vals: Array<ObjectId | string> = [deploymentId];
+    if (isObjectIdString(deploymentId)) vals.push(asObjectId(deploymentId));
+    filter.deploymentId = { $in: vals };
+  }
+  const docs = await usageMetricsCol
+    .find(filter)
+    .sort({ windowStart: -1 })
+    .limit(Math.min(Math.max(limit, 1), 500))
+    .toArray();
+  return docs.map(mapUsageMetric);
+}

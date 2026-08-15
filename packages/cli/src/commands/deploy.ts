@@ -41,13 +41,13 @@ export async function deploy(options: DeployOptions) {
       }
     );
 
-    const { subdomain, status } = response.data.deployment;
+    const { publicUrl, subdomain, status } = response.data.deployment;
 
     spinner.succeed(chalk.green('Deployment successful!'));
     console.log(`\n${chalk.blue('Name:')} ${deploymentName}`);
     console.log(`${chalk.blue('Image:')} ${options.image}`);
     console.log(`${chalk.blue('Status:')} ${status}`);
-    console.log(`${chalk.green('URL:')} https://${subdomain}.cloudlane.run\n`);
+    console.log(`${chalk.green('URL:')} ${publicUrl || `https://${subdomain}.cloudlane.run`}\n`);
   } catch (error: any) {
     spinner.fail(chalk.red('Deployment failed'));
     if (error.response?.data?.error) {

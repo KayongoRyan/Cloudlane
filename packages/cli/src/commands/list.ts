@@ -39,7 +39,7 @@ export async function listDeployments() {
     console.log('─'.repeat(90));
 
     deployments.forEach((d: any) => {
-      const url = `https://${d.subdomain}.cloudlane.run`;
+      const url = d.publicUrl || (d.subdomain ? `https://${d.subdomain}.cloudlane.run` : '');
       console.log(
         chalk.white(d.name.padEnd(25)) +
         chalk.green(d.status.padEnd(15)) +

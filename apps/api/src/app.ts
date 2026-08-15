@@ -2,6 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import authRoutes from './routes/auth';
 import deploymentRoutes from './routes/deployments';
+import apiKeyRoutes from './routes/apiKeys';
+import auditLogRoutes from './routes/auditLogs';
+import usageMetricRoutes from './routes/usageMetrics';
 import { initializeDatabase } from './database';
 
 const app = express();
@@ -65,6 +68,9 @@ app.use(async (req, res, next) => {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/deployments', deploymentRoutes);
+app.use('/api/api-keys', apiKeyRoutes);
+app.use('/api/audit-logs', auditLogRoutes);
+app.use('/api/usage-metrics', usageMetricRoutes);
 
 // Root
 app.get('/', (_req, res) => {

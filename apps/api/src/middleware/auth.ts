@@ -86,8 +86,21 @@ export async function authenticateApiKey(
     await markApiKeyUsed(apiKeyRecord.id);
 
     req.tenantId = apiKeyRecord.tenantId;
+    req.userId = apiKeyRecord.userId;
     next();
   } catch (error) {
     res.status(500).json({ error: 'Authentication error' });
   }
+}
+
+/** JWT Bearer or X-API-Key. */
+export async function authenticateRequest(
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
+  if (req.headers['x-api-key']) {
+    return authenticateApiKey(req, res, next);
+  }
+  return authenticateJWT(req, res, next);
 }

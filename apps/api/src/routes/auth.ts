@@ -2,7 +2,7 @@
 import * as jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import config from '../config';
-import { createUserAndTenant, findUserByEmail } from '../database';
+import { createUserAndTenant, findUserByEmail, writeAuditLog } from '../database';
 
 const router = Router();
 
@@ -31,6 +31,15 @@ router.post('/register', async (req, res) => {
         secret,
         signOptions
     );
+
+    await writeAuditLog({
+      tenantId: user.tenantId,
+      userId: user.id,
+      action: 'user.register',
+      resourceType: 'user',
+      resourceId: user.id,
+      changes: { email: normalizedEmail, organization: organization.trim() },
+    });
 
     return res.status(201).json({ token });
   } catch (error: any) {

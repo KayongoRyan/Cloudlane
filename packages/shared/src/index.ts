@@ -1,31 +1,21 @@
-// Shared types for Cloudlane
+// Shared types for Cloudlane — matches the Mongo ERD (ObjectId hex strings on the wire)
+
+export interface TenantLimits {
+  maxDeployments: number;
+  maxCpu: number;
+  maxMemoryMb: number;
+  maxInstances: number;
+}
 
 export interface Tenant {
   _id: string;
-  name: string;
   slug: string;
-  ownerId: string;
-  tier: 'free' | 'pro' | 'enterprise';
-  status: 'active' | 'suspended' | 'deleted';
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface Deployment {
-  _id: string;
-  tenantId: string;
   name: string;
-  image: string;
-  port: number;
-  subdomain: string;
-  status: 'pending' | 'deploying' | 'running' | 'stopped' | 'failed';
-  scaleToZero: boolean;
-  minReplicas: number;
-  maxReplicas: number;
-  currentReplicas: number;
-  url: string;
+  status: 'active' | 'suspended' | 'deleted';
+  tier: 'free' | 'pro' | 'enterprise';
+  limits: TenantLimits;
+  irembopayCustomerId: string | null;
   createdAt: string;
-  updatedAt: string;
 }
 
 export interface User {
@@ -33,29 +23,59 @@ export interface User {
   tenantId: string;
   email: string;
   role: 'admin' | 'developer' | 'viewer';
+  status: 'active' | 'invited' | 'disabled';
   createdAt: string;
-  updatedAt: string;
+}
+
+export interface Deployment {
+  _id: string;
+  tenantId: string;
+  name: string;
+  slug: string;
+  image: string;
+  cpu: number;
+  memory: number;
+  minInstances: number;
+  maxInstances: number;
+  status: 'pending' | 'deploying' | 'running' | 'stopped' | 'failed';
+  publicUrl: string;
+  k8sNamespace: string;
+  port: number;
+  deletedAt: string | null;
+  createdAt: string;
 }
 
 export interface ApiKey {
   _id: string;
   tenantId: string;
+  userId: string;
   name: string;
   prefix: string;
-  expiresAt?: string;
-  lastUsedAt?: string;
+  scopes: string[];
+  expiresAt: string | null;
+  lastUsedAt: string | null;
+}
+
+export interface AuditLog {
+  _id: string;
+  tenantId: string;
+  userId: string | null;
+  action: string;
+  resourceType: string;
+  resourceId: string | null;
+  changes: Record<string, unknown>;
+  ipAddress: string | null;
   createdAt: string;
 }
 
-export interface UsageRecord {
+export interface UsageMetric {
   _id: string;
   tenantId: string;
   deploymentId: string;
-  timestamp: string;
-  durationSeconds: number;
-  requestCount: number;
-  memoryMbSeconds: number;
-  cpuMillisSeconds: number;
+  metricType: string;
+  value: number;
+  windowStart: string;
+  windowEnd: string;
 }
 
 export interface BillingRecord {
@@ -75,20 +95,6 @@ export interface BillingRecord {
   createdAt: string;
 }
 
-export interface AuditLog {
-  _id: string;
-  tenantId: string;
-  userId?: string;
-  action: string;
-  resourceType: string;
-  resourceId?: string;
-  metadata: Record<string, any>;
-  ipAddress?: string;
-  userAgent?: string;
-  createdAt: string;
-}
-
-// API Response types
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
@@ -99,8 +105,10 @@ export interface DeployRequest {
   name?: string;
   image: string;
   port?: number;
-  scaleToZero?: boolean;
-  environment?: Record<string, string>;
+  cpu?: number;
+  memory?: number;
+  minInstances?: number;
+  maxInstances?: number;
 }
 
 export interface LoginRequest {
@@ -110,7 +118,6 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   token: string;
-  apiKey: string;
   user: {
     id: string;
     email: string;
