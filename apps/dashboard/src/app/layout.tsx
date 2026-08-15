@@ -16,7 +16,7 @@ const dmSans = DM_Sans({
 
 export const metadata: Metadata = {
   title: 'Cloudlane',
-  description: 'Deploy a container, get a live URL. Pay only for what you use.',
+  description: 'Deploy Faster. Scale Smarter. Build Without Limits.',
 }
 
 export const viewport: Viewport = {

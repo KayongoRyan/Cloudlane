@@ -56,11 +56,11 @@ export default function Home() {
         <section className="auth-brand">
           <Logo size="lg" className="auth-logo" />
           <h1 className="auth-headline">
-            Deploy a container.
-            <span> Get a live URL.</span>
+            Deploy Faster.
+            <span> Scale Smarter.</span>
           </h1>
           <p className="auth-lede">
-            Scale to zero when idle. Pay only for the seconds you use.
+            Build Without Limits.
           </p>
         </section>
 

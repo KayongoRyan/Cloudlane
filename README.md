@@ -1,6 +1,8 @@
 # Cloudlane
 
-Deploy a container, get a live URL, pay only for what you use. Multi-tenant control plane with a Cloud Run-style loop: `deploy` → URL, scale-to-zero when idle, pay per second.
+Deploy Faster. Scale Smarter. Build Without Limits.
+
+Multi-tenant control plane with a Cloud Run-style loop: `deploy` → URL, scale-to-zero when idle, pay per second.
 
 ```bash
 cloudlane deploy --image myrepo/app:v1 --port 8080
