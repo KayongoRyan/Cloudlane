@@ -1,29 +1,36 @@
 # Cloudlane FastAPI API
 
-This FastAPI service provides the Python API layer for Cloudlane.
+Python control plane for Cloudlane. Replaces the legacy Node.js API in `apps/api`.
 
 ## Run locally
 
-1. Create a virtual environment:
+```bash
+cd apps/api_python
+python -m venv .venv
+.venv\Scripts\activate          # Windows
+# source .venv/bin/activate     # macOS/Linux
+pip install -r requirements.txt
+copy .env.example .env          # set DATABASE_URL + JWT_SECRET
+python -m uvicorn main:app --reload --host 0.0.0.0 --port 8001
+```
 
-   python -m venv .venv
-   .venv\Scripts\activate
-
-2. Install dependencies:
-
-   pip install -r requirements.txt
-
-3. Copy environment variables:
-
-   copy .env.example .env
-
-4. Start the app:
-
-   uvicorn main:app --reload --host 0.0.0.0 --port 8001
+From repo root: `npm run dev:api` (port **8001**).
 
 ## Routes
 
-- `POST /api/auth/login`
-- `GET /api/deployments`
-- `POST /api/deployments`
-- `GET /api/health`
+| Method | Path |
+|---|---|
+| `POST` | `/api/auth/register` |
+| `POST` | `/api/auth/login` |
+| `GET/POST` | `/api/deployments` |
+| `GET/POST` | `/api/api-keys` |
+| `DELETE` | `/api/api-keys/{id}` |
+| `GET` | `/api/audit-logs` |
+| `GET/POST` | `/api/usage-metrics` |
+| `GET` | `/health` |
+
+Auth: `Authorization: Bearer <jwt>` or `X-API-Key`.
+
+## Netlify
+
+Set Netlify **base directory** to `apps/api_python`. Env: `DATABASE_URL`, `JWT_SECRET`. See [docs/DEPLOYMENT.md](../../docs/DEPLOYMENT.md).

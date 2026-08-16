@@ -11,7 +11,7 @@ interface LoginOptions {
 }
 
 export async function login(options: LoginOptions) {
-  const apiUrl = process.env.CLOUDLANE_API_URL || 'http://localhost:3001';
+  const apiUrl = process.env.CLOUDLANE_API_URL || 'http://localhost:8001';
   
   let email = options.email;
   let password = options.password;

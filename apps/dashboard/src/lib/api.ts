@@ -17,12 +17,12 @@ export function getApiBase(): string {
   const fromEnv = process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, '')
   if (fromEnv) return fromEnv
 
-  return 'http://localhost:3001'
+  return 'http://localhost:8001'
 }
 
 export function apiReachabilityHint(apiBase: string): string {
   if (apiBase.includes('localhost')) {
-    return 'Start MongoDB (docker compose up -d) and the API (cd apps/api && npm run dev).'
+    return 'Start MongoDB (docker compose up -d) and the API (cd apps/api_python && python -m uvicorn main:app --reload --port 8001).'
   }
   return 'On Netlify: set DATABASE_URL (MongoDB Atlas) and JWT_SECRET, then trigger a redeploy.'
 }

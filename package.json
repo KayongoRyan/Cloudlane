@@ -8,11 +8,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "concurrently \"cd apps/api && npm run dev\" \"cd apps/dashboard && npm run dev\"",
-    "dev:api": "cd apps/api && npm run dev",
+    "dev": "concurrently \"cd apps/api_python && python -m uvicorn main:app --reload --host 0.0.0.0 --port 8001\" \"cd apps/dashboard && npm run dev\"",
+    "dev:api": "cd apps/api_python && python -m uvicorn main:app --reload --host 0.0.0.0 --port 8001",
     "dev:dashboard": "cd apps/dashboard && npm run dev",
-    "build": "cd apps/api && npm run build && cd ../dashboard && npm run build",
-    "test": "cd apps/api && npm run test && cd ../dashboard && npm run test",
+    "build": "cd apps/dashboard && npm run build",
+    "test": "cd apps/dashboard && npm run test",
     "lint": "eslint . --ext .ts,.tsx"
   },
   "devDependencies": {

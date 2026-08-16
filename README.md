@@ -25,7 +25,7 @@ Customer (CLI / dashboard)
         │
         ▼
 Control plane API  ──────────────►  MongoDB Atlas
-(Express on Netlify)                ObjectId ERD (see below)
+(FastAPI on Netlify)                ObjectId ERD (see below)
         │
         ▼
 Kubernetes (EKS, planned)
@@ -83,7 +83,7 @@ Bearer JWT or `X-API-Key`.
 
 | Layer | Choice |
 |---|---|
-| API | Node.js, TypeScript, Express (`serverless-http` on Netlify) |
+| API | Python, FastAPI, Mangum (Netlify serverless) |
 | Dashboard | Next.js 14 (App Router) on Vercel |
 | CLI | Commander.js |
 | Compute | Kubernetes (AWS EKS) — provisioning wired, cluster not production yet |
@@ -96,7 +96,8 @@ Bearer JWT or `X-API-Key`.
 ```
 cloudlane/
 ├── apps/
-│   ├── api/          # Express control plane (Netlify functions)
+│   ├── api_python/   # FastAPI control plane (Netlify)
+│   ├── api/          # legacy Node API (deprecated)
 │   └── dashboard/    # Next.js dashboard (Vercel)
 ├── packages/
 │   ├── cli/          # `cloudlane` CLI
@@ -108,7 +109,7 @@ cloudlane/
 
 ## Local
 
-Node 20+, Docker, `apps/api/.env` (gitignored — copy from `apps/api/.env.example`):
+Python 3.11+, Node 20+ (dashboard), Docker, `apps/api_python/.env` (copy from `.env.example`):
 
 ```
 DATABASE_URL=mongodb://localhost:27017/cloudlane
@@ -119,20 +120,21 @@ If compose auth is on, set root `.env` `MONGO_PASSWORD` and point `DATABASE_URL`
 
 ```bash
 docker compose up -d
+cd apps/api_python && pip install -r requirements.txt
 npm install
-npm run dev                 # API :3001 + dashboard :3000
+npm run dev                 # API :8001 + dashboard :3000
 ```
 
-Dashboard on localhost hits `:3001`; production hits the Netlify API.
+Dashboard on localhost hits `:8001`; production hits the Netlify API.
 
 ## Production
 
 | App | Host | Root |
 |---|---|---|
 | Dashboard | Vercel (`cloudlane-dashboard`) | `apps/dashboard` |
-| API | Netlify | `apps/api` |
+| API | Netlify | `apps/api_python` |
 
-Netlify: base `apps/api`, build `npm run build`, publish `public`, functions `netlify/functions`. Env: `DATABASE_URL` (Atlas, set in the UI only), `JWT_SECRET`. Atlas Network Access: `0.0.0.0/0`. Production branch: `develop`.
+Netlify: base `apps/api_python`, build `pip install -r requirements.txt`, publish `public`, functions `netlify/functions`. Env: `DATABASE_URL` (Atlas, set in the UI only), `JWT_SECRET`. Atlas Network Access: `0.0.0.0/0`. Production branch: `develop`.
 
 Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after changing it.
 
@@ -162,4 +164,4 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 
 ## Status
 
-MVP in progress. Dashboard + auth + ERD APIs are live on Atlas. K8s deploy path and IremboPay charges are not production yet.
+MVP in progress. **FastAPI** control plane replaces legacy Node API. Dashboard + auth + ERD routes ready; point Netlify base dir to `apps/api_python` and redeploy.

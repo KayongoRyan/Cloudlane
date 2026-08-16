@@ -1,6 +1,6 @@
-from enum import Enum
 from datetime import datetime
-from pydantic import BaseModel, Field, EmailStr
+
+from pydantic import BaseModel, EmailStr, Field
 
 
 class TokenResponse(BaseModel):
@@ -12,30 +12,31 @@ class LoginRequest(BaseModel):
     password: str
 
 
-class DeploymentStatus(str, Enum):
-    pending = 'pending'
-    deploying = 'deploying'
-    running = 'running'
-    stopped = 'stopped'
-    failed = 'failed'
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    password: str
+    organization: str
 
 
 class DeploymentCreate(BaseModel):
     name: str = Field(..., min_length=2)
     image: str = Field(..., min_length=3)
     port: int = Field(..., ge=1, le=65535)
+    cpu: float | None = None
+    memory: int | None = None
+    minInstances: int | None = None
+    maxInstances: int | None = None
 
 
-class DeploymentOut(BaseModel):
-    id: str
-    tenant_id: str
-    name: str
-    image: str
-    port: int
-    subdomain: str
-    status: DeploymentStatus
-    created_at: datetime
-    updated_at: datetime
+class ApiKeyCreate(BaseModel):
+    name: str | None = None
+    scopes: list[str] | None = None
+    expiresAt: str | None = None
 
-    class Config:
-        orm_mode = True
+
+class UsageMetricCreate(BaseModel):
+    deploymentId: str
+    metricType: str
+    value: float
+    windowStart: str
+    windowEnd: str

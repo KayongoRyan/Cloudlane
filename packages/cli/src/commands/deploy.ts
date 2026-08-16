@@ -13,7 +13,7 @@ interface DeployOptions {
 }
 
 export async function deploy(options: DeployOptions) {
-  const apiUrl = config.get('apiUrl') as string || process.env.CLOUDLANE_API_URL || 'http://localhost:3001';
+  const apiUrl = config.get('apiUrl') as string || process.env.CLOUDLANE_API_URL || 'http://localhost:8001';
   const apiKey = config.get('apiKey') as string;
 
   if (!apiKey) {

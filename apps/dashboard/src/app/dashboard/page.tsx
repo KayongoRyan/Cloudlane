@@ -185,7 +185,7 @@ export default function Dashboard() {
                   <ul>
                     <li><span>Compute</span><b>42s</b></li>
                     <li><span>Idle</span><b>$0</b></li>
-                  </ul>
+            </ul>
                   <span className="hero-card-foot">Pay per second</span>
                 </article>
 
@@ -242,7 +242,7 @@ export default function Dashboard() {
                   <h3>{title}</h3>
                   <p>{body}</p>
                   <span className="cl-product-arrow" aria-hidden="true">→</span>
-                </button>
+              </button>
               ))}
             </div>
           </div>
@@ -299,7 +299,7 @@ export default function Dashboard() {
                 Claim your runway
               </button>
             </div>
-          </div>
+                      </div>
         </section>
       </main>
 
@@ -316,7 +316,7 @@ export default function Dashboard() {
             <button type="button" className="cl-footer-cta" onClick={() => setShowDeployForm(true)}>
               Start a deploy
             </button>
-          </div>
+                    </div>
 
           <div className="cl-footer-cols">
             <div className="cl-footer-col">
@@ -329,7 +329,7 @@ export default function Dashboard() {
                 <li><a href="#products">Cloudlane CLI</a></li>
                 <li><a href="#products">Managed ingress</a></li>
               </ul>
-            </div>
+                    </div>
 
             <div className="cl-footer-col">
               <h3>Solutions</h3>
@@ -341,7 +341,7 @@ export default function Dashboard() {
                 <li><a href="#solutions">Multi-tenant SaaS</a></li>
                 <li><a href="#solutions">Wake-on-request workers</a></li>
               </ul>
-            </div>
+          </div>
 
             <div className="cl-footer-col">
               <h3>Resources</h3>

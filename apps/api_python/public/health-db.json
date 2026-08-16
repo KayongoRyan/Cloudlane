@@ -1,0 +1,6 @@
+{
+  "status": "ok",
+  "database": "atlas-configured",
+  "hasDatabaseUrl": true,
+  "note": "Static health-db.json — does not invoke the function."
+}
