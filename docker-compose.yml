@@ -39,7 +39,7 @@ services:
     image: grafana/grafana:10.4.2
     container_name: cloudlane-grafana
     ports:
-      - "3001:3000"
+      - "3002:3000"
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-cloudlane}
