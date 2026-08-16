@@ -3,8 +3,8 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import useSWR from 'swr'
-import Logo from '../../components/Logo'
-import { getApiBase } from '../../lib/api'
+import Logo from '../../../components/Logo'
+import { getApiBase } from '../../../lib/api'
 
 type Tab = 'deployments' | 'projects' | 'keys' | 'storage' | 'billing' | 'monitoring' | 'vms'
 
@@ -80,7 +80,7 @@ async function apiGet<T>(path: string): Promise<T> {
   return res.json()
 }
 
-async function apiSend(path: string, method: string, body?: unknown) {
+async function apiSend<T = unknown>(path: string, method: string, body?: unknown): Promise<T | null> {
   const res = await fetch(`${getApiBase()}${path}`, {
     method,
     headers: authHeaders(),
@@ -92,7 +92,7 @@ async function apiSend(path: string, method: string, body?: unknown) {
     throw new Error(data.detail || data.error || 'Request failed')
   }
   if (res.status === 204) return null
-  return res.json()
+  return res.json() as Promise<T>
 }
 
 export default function ConsolePage() {
@@ -107,9 +107,9 @@ export default function ConsolePage() {
   const [vmForm, setVmForm] = useState({ name: '', cpu: 1, memoryMb: 512 })
   const [busy, setBusy] = useState(false)
 
-  const fetcher = useCallback(async (path: string) => {
+  const fetcher = useCallback(async <T,>(path: string): Promise<T> => {
     try {
-      return await apiGet(path)
+      return await apiGet<T>(path)
     } catch (err: unknown) {
       if (err instanceof Error && err.message === 'unauthorized') {
         router.push('/')
@@ -118,9 +118,9 @@ export default function ConsolePage() {
     }
   }, [router])
 
-  const { data: projectsData, mutate: mutateProjects } = useSWR<{ projects: Project[] }>(
+  const { data: projectsData, mutate: mutateProjects } = useSWR(
     'console-projects',
-    () => fetcher('/api/projects'),
+    () => fetcher<{ projects: Project[] }>('/api/projects'),
   )
   const projects = projectsData?.projects ?? []
 
@@ -131,33 +131,33 @@ export default function ConsolePage() {
   }, [projects, projectId])
 
   const projectQuery = projectId ? `?projectId=${projectId}` : ''
-  const { data: depData, mutate: mutateDeps } = useSWR<{ deployments: Deployment[] }>(
+  const { data: depData, mutate: mutateDeps } = useSWR(
     ['console-deployments', projectId],
-    () => fetcher(`/api/deployments${projectQuery}`),
+    () => fetcher<{ deployments: Deployment[] }>(`/api/deployments${projectQuery}`),
   )
-  const { data: keysData, mutate: mutateKeys } = useSWR<{ apiKeys: ApiKeyRow[] }>(
+  const { data: keysData, mutate: mutateKeys } = useSWR(
     tab === 'keys' ? 'console-keys' : null,
-    () => fetcher('/api/api-keys'),
+    () => fetcher<{ apiKeys: ApiKeyRow[] }>('/api/api-keys'),
   )
-  const { data: bucketsData, mutate: mutateBuckets } = useSWR<{ buckets: Bucket[] }>(
+  const { data: bucketsData, mutate: mutateBuckets } = useSWR(
     tab === 'storage' ? ['console-buckets', projectId] : null,
-    () => fetcher(`/api/buckets${projectQuery}`),
+    () => fetcher<{ buckets: Bucket[] }>(`/api/buckets${projectQuery}`),
   )
-  const { data: billingUsage, mutate: mutateBilling } = useSWR<{ usage: { computeSeconds: number; estimatedCost: number; currency: string } }>(
+  const { data: billingUsage, mutate: mutateBilling } = useSWR(
     tab === 'billing' ? 'console-usage' : null,
-    () => fetcher('/api/billing/usage'),
+    () => fetcher<{ usage: { computeSeconds: number; estimatedCost: number; currency: string } }>('/api/billing/usage'),
   )
-  const { data: invoicesData, mutate: mutateInvoices } = useSWR<{ invoices: Invoice[] }>(
+  const { data: invoicesData, mutate: mutateInvoices } = useSWR(
     tab === 'billing' ? 'console-invoices' : null,
-    () => fetcher('/api/billing/invoices'),
+    () => fetcher<{ invoices: Invoice[] }>('/api/billing/invoices'),
   )
-  const { data: monitoring, mutate: mutateMonitoring } = useSWR<MonitoringSummary>(
+  const { data: monitoring, mutate: mutateMonitoring } = useSWR(
     tab === 'monitoring' ? 'console-monitoring' : null,
-    () => fetcher('/api/monitoring/summary'),
+    () => fetcher<MonitoringSummary>('/api/monitoring/summary'),
   )
-  const { data: vmsData, mutate: mutateVms } = useSWR<{ vms: Vm[] }>(
+  const { data: vmsData, mutate: mutateVms } = useSWR(
     tab === 'vms' ? ['console-vms', projectId] : null,
-    () => fetcher(`/api/vms${projectQuery}`),
+    () => fetcher<{ vms: Vm[] }>(`/api/vms${projectQuery}`),
   )
 
   const deployments = depData?.deployments ?? []
@@ -188,7 +188,7 @@ export default function ConsolePage() {
     setBusy(true)
     setError('')
     try {
-      const res = await apiSend('/api/projects', 'POST', { name: projectName })
+      const res = await apiSend<{ project: Project }>('/api/projects', 'POST', { name: projectName })
       setProjectName('')
       await mutateProjects()
       if (res?.project?.id) setProjectId(res.project.id)
@@ -204,8 +204,8 @@ export default function ConsolePage() {
     setError('')
     setNewKey(null)
     try {
-      const res = await apiSend('/api/api-keys', 'POST', { name: 'Dashboard key', scopes: ['deploy', 'read'] })
-      setNewKey(res.key)
+      const res = await apiSend<{ key: string }>('/api/api-keys', 'POST', { name: 'Dashboard key', scopes: ['deploy', 'read'] })
+      setNewKey(res?.key ?? null)
       await mutateKeys()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Create key failed')
