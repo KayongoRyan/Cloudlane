@@ -62,8 +62,8 @@ export default function SignupPage() {
         <section className="auth-brand">
           <Logo size="lg" className="auth-logo" />
           <h1 className="auth-headline">
-            Your first deploy
-            <span> in minutes.</span>
+            <span className="auth-headline-line">Your first deploy</span>
+            <span className="auth-headline-line auth-headline-muted">in minutes.</span>
           </h1>
           <p className="auth-lede">
             Create a workspace, ship a container, and publish a live URL —

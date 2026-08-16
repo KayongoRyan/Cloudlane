@@ -56,8 +56,8 @@ export default function Home() {
         <section className="auth-brand">
           <Logo size="lg" className="auth-logo" />
           <h1 className="auth-headline">
-            Deploy Faster.
-            <span> Scale Smarter.</span>
+            <span className="auth-headline-line">Deploy Faster.</span>
+            <span className="auth-headline-line auth-headline-muted">Scale Smarter.</span>
           </h1>
           <p className="auth-lede">
             Build Without Limits.

@@ -98,6 +98,7 @@ button {
   min-height: 100svh;
   overflow: hidden;
   isolation: isolate;
+  background: var(--cl-surface);
 }
 
 .auth-atmosphere {
@@ -114,16 +115,18 @@ button {
 .auth-grid {
   min-height: 100vh;
   min-height: 100svh;
-  display: grid;
-  grid-template-columns: 1.15fr 0.85fr;
+  width: 100%;
   max-width: 1280px;
   margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
 }
 
 .auth-brand {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  align-items: flex-start;
   padding: clamp(2.5rem, 6vw, 5.5rem);
   animation: auth-rise 0.7s ease-out both;
 }
@@ -134,7 +137,6 @@ button {
 
 .auth-headline {
   margin: 0;
-  max-width: 11ch;
   font-family: var(--font-display), "Syne", sans-serif;
   font-size: clamp(2.6rem, 5.2vw, 4.4rem);
   font-weight: 700;
@@ -143,8 +145,11 @@ button {
   color: var(--cl-ink);
 }
 
-.auth-headline span {
+.auth-headline-line {
   display: block;
+}
+
+.auth-headline-muted {
   color: var(--cl-muted);
 }
 
@@ -160,6 +165,8 @@ button {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  min-height: 100vh;
+  min-height: 100svh;
   padding: clamp(2rem, 5vw, 4rem) clamp(1.5rem, 4vw, 3.5rem);
   border-left: 1px solid var(--cl-stroke);
   background: var(--cl-white);
@@ -259,6 +266,14 @@ button {
   box-shadow: 0 0 0 3px rgba(186, 189, 164, 0.35);
 }
 
+.auth-field input:-webkit-autofill,
+.auth-field input:-webkit-autofill:hover,
+.auth-field input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--cl-ink);
+  box-shadow: 0 0 0 1000px var(--cl-white) inset;
+  transition: background-color 9999s ease-out 0s;
+}
+
 .auth-error {
   padding: 0.9rem 1rem;
   border-radius: 12px;
@@ -331,13 +346,13 @@ button {
   }
 
   .auth-form-panel {
+    min-height: auto;
     border-left: none;
     border-top: 1px solid var(--stroke);
     padding: 2rem 1.25rem 3rem;
   }
 
   .auth-headline {
-    max-width: 16ch;
     font-size: clamp(2.1rem, 10vw, 3.2rem);
   }
 }
