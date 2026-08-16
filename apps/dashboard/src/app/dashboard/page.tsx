@@ -27,6 +27,13 @@ export default function Dashboard() {
   const [submitting, setSubmitting] = useState(false)
   const [navScrolled, setNavScrolled] = useState(false)
   const [navOpen, setNavOpen] = useState(false)
+  const [apiHealthy, setApiHealthy] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    fetch(`${apiBase()}/health`)
+      .then((r) => setApiHealthy(r.ok))
+      .catch(() => setApiHealthy(false))
+  }, [])
 
   useEffect(() => {
     const onScroll = () => setNavScrolled(window.scrollY > 12)
@@ -133,7 +140,7 @@ export default function Dashboard() {
         </nav>
 
         <div className="hero-sky-actions">
-          <button type="button" className="hero-sky-console" onClick={() => { setNavOpen(false); setShowDeployForm(true) }}>
+          <button type="button" className="hero-sky-console" onClick={() => { setNavOpen(false); router.push('/dashboard/console') }}>
             Console
           </button>
           <button type="button" className="gcp-avatar" onClick={handleLogout} title="Sign out">
@@ -211,7 +218,7 @@ export default function Dashboard() {
             <button type="button" className="gcp-btn-primary" onClick={() => setShowDeployForm(true)}>
               Deploy now
             </button>
-            <button type="button" className="hero-sky-ghost" onClick={() => setShowDeployForm(true)}>
+            <button type="button" className="hero-sky-ghost" onClick={() => router.push('/dashboard/console')}>
               Open console
             </button>
           </div>
@@ -375,8 +382,8 @@ export default function Dashboard() {
               <a href="#overview">Terms</a>
               <a href="#credits">Pricing</a>
               <span className="cl-footer-status">
-                <span className="cl-footer-status-dot" aria-hidden="true" />
-                All systems nominal
+                <span className={`cl-footer-status-dot${apiHealthy === false ? ' is-down' : ''}`} aria-hidden="true" />
+                {apiHealthy === false ? 'API unreachable' : apiHealthy ? 'All systems nominal' : 'Checking status…'}
               </span>
             </div>
           </div>

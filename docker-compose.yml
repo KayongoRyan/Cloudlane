@@ -6,9 +6,50 @@ services:
       - "27017:27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: cloudlane
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-cloudlane}
     volumes:
       - cloudlane_mongo_data:/data/db
 
+  minio:
+    image: minio/minio:latest
+    container_name: cloudlane-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: cloudlane
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-cloudlane-secret}
+    volumes:
+      - cloudlane_minio_data:/data
+
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    container_name: cloudlane-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - cloudlane_prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: cloudlane-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-cloudlane}
+    volumes:
+      - cloudlane_grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
 volumes:
   cloudlane_mongo_data:
+  cloudlane_minio_data:
+  cloudlane_prometheus_data:
+  cloudlane_grafana_data:

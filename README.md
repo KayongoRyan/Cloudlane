@@ -79,33 +79,269 @@ Bearer JWT or `X-API-Key`.
 
 `POST /api/api-keys` returns the plaintext key **once**. Register and deploy write `audit_logs`.
 
+## Languages
+
+Cloudlane is polyglot by design. Each language owns the layer it fits best:
+
+| Language | Where we use it |
+|---|---|
+| **C** | Pointers, memory management, threads, sockets, files — low-level runtime and system primitives |
+| **Go** | Kubernetes, Docker, Prometheus, Terraform, etcd, control-plane operators and cloudplane tooling |
+| **Rust** | Security-critical paths, high performance, storage engines, networking |
+| **Python** | Automation, AI, testing, scripting — FastAPI control plane API today |
+| **TypeScript** | Dashboard, CLI, developer portal, API SDK |
+
+```
+TypeScript ──► Dashboard / CLI / Dev portal / SDK
+Python     ──► Control plane API / automation / AI / tests
+Go         ──► K8s · Docker · Prometheus · Terraform · etcd · operators
+Rust       ──► Security · hot paths · storage · networking
+C          ──► Memory · threads · sockets · files (system core)
+```
+
+## Core systems knowledge
+
+Foundations every Cloudlane engineer is expected to own — below containers and K8s.
+
+### Linux internals
+
+Foundation of servers and processes: boot, init, process lifecycle, signals, users/groups, systemd, journald, and how a machine actually runs workloads.
+
+### Computer networking
+
+| Topic | Scope |
+|---|---|
+| Routing | How packets find a path between networks |
+| TCP/IP | Reliable transport, congestion, sockets |
+| DNS | Name resolution for services and edge |
+| Load balancing | L4 / L7 distribution, health checks |
+| VPNs | Encrypted tunnels and private connectivity |
+
+### Operating system
+
+| Topic | Scope |
+|---|---|
+| Scheduling | CPU time, priorities, preemption |
+| Memory | Virtual memory, paging, allocation |
+| File systems | Persistence, mounts, permissions |
+| Isolation | Processes, namespaces, sandboxes |
+
+### Virtualization
+
+| Topic | Scope |
+|---|---|
+| Hypervisors | Type-1 / Type-2 isolation of guest machines |
+| KVM | Linux kernel virtualization (Cloudlane VM base) |
+| Firecracker | MicroVMs — fast, secure multi-tenant compute |
+| QEMU | Emulation / device model paired with KVM |
+
+### Distributed systems
+
+| Topic | Scope |
+|---|---|
+| Consensus | Agreement across nodes (e.g. Raft / etcd) |
+| Replication | Copies for durability and read scale |
+| Partition tolerance | Correct behavior when the network splits |
+
+### Cybersecurity
+
+| Topic | Scope |
+|---|---|
+| IAM | Identity, roles, least privilege |
+| PKI | Certificates, CAs, trust chains |
+| TLS | Encrypted transport everywhere |
+| Encryption | Data at rest and in transit |
+| Zero trust | Never trust the network; verify every request |
+
+```
+Linux internals · OS · Networking
+        │
+        ▼
+Virtualization (KVM · Firecracker · QEMU)
+        │
+        ▼
+Distributed systems (consensus · replication · partitions)
+        │
+        ▼
+Cybersecurity (IAM · PKI · TLS · encryption · zero trust)
+```
+
+## Platform foundations
+
+What Cloudlane’s compute and delivery surface is built on — and what we expect every layer to understand.
+
+### Containers
+
+| Topic | Scope |
+|---|---|
+| Docker | Build, run, and ship workload images |
+| Images | Layered OCI images, tags, digests |
+| Volumes | Persistent and ephemeral container storage |
+| Networking | Bridge, host, overlay, service discovery |
+| Registry | Push/pull, private registries, image promotion |
+| BuildKit | Fast, cacheable multi-stage builds |
+| Container runtime | containerd / CRI — what actually runs the container |
+| OCI | Image and runtime specs (portable across engines) |
+| Namespaces | Process, network, mount isolation |
+| cgroups | CPU / memory / IO limits and accounting |
+
+### Kubernetes
+
+| Topic | Scope |
+|---|---|
+| Pods | Smallest schedulable unit |
+| Deployments | Declarative rollouts for stateless apps |
+| ReplicaSets | Desired replica count under Deployments |
+| Services | Stable networking to Pods |
+| Ingress | HTTP(S) routing and TLS termination |
+| StatefulSets | Ordered, sticky identity for stateful workloads |
+| Jobs | Run-to-completion batch work |
+| DaemonSets | One Pod per node (agents, logs, mesh) |
+| RBAC | Who can do what in the cluster |
+| Operators | Controllers that extend the API for custom resources |
+| Network policies | Pod-to-pod traffic rules |
+| Storage classes | Dynamic volume provisioning |
+| Helm | Package and template cluster apps |
+
+### Infrastructure as Code & delivery
+
+| Topic | Scope |
+|---|---|
+| Terraform | Provision cloud + cluster infra as code |
+| Ansible | Config management and host automation |
+| GitHub Actions | CI pipelines (build, test, scan, publish) |
+| Argo CD | GitOps continuous delivery to Kubernetes |
+| CI/CD | End-to-end: commit → image → deploy → verify |
+
+```
+Containers (OCI / Docker / BuildKit / cgroups)
+        │
+        ▼
+Kubernetes (Pods · Deployments · Services · Ingress · Operators · Helm …)
+        │
+        ▼
+IaC & delivery (Terraform · Ansible · GitHub Actions · Argo CD)
+```
+
+## How the platform operates
+
+Cloudlane is a full cloud surface — identity → projects → compute/storage/data → edge → observe → pay. This is how it works:
+
+```
+Developer (CLI / SDK / Dashboard)
+        │
+        ▼
+API Gateway ──► Authentication · IAM · Organizations · Projects
+        │
+        ├── Virtual Machines · Storage · Database · Networking · DNS
+        ├── Monitoring · Logging · Backups
+        ├── Marketplace
+        └── Billing
+```
+
+| Service | Role |
+|---|---|
+| **Authentication** | Sign-in, tokens, API keys — who is calling |
+| **IAM** | Roles, policies, least-privilege access across orgs and projects |
+| **Organizations** | Top-level tenant boundary (company / team) |
+| **Projects** | Scoped workspaces inside an org — isolate apps and quotas |
+| **API Gateway** | Single front door: routing, authn/authz, rate limits, versioning |
+| **Virtual Machines** | Compute instances (and container-backed workloads) |
+| **Storage** | Object / block / volume storage for apps and backups |
+| **Database** | Managed data stores for customer workloads |
+| **Networking** | VPCs, load balancing, private connectivity, firewalls |
+| **DNS** | Hostnames and records for public and private services |
+| **Monitoring** | Metrics, health, alerts on every resource |
+| **Logging** | Centralized logs from compute, gateways, and control plane |
+| **Backups** | Snapshots and restore for storage and databases |
+| **Billing** | Metered usage, invoices, IremboPay settlement |
+| **Marketplace** | Discover and install partner / curated images and add-ons |
+| **Developer CLI** | `cloudlane` — login, deploy, list, logs from the terminal |
+| **SDK** | Typed client libraries for the public API |
+
+Identity and tenancy flow: **Organization → Project → IAM → resources**. Every VM, bucket, DB, and DNS zone lives under a project; Billing meters usage; Monitoring and Logging attach to the same resource IDs.
+
 ## Tech stack
+
+Language → job, then the concrete products we run.
+
+### Languages
+
+| Domain | Language | Why |
+|---|---|---|
+| System programming | **C** | Pointers, memory, threads, sockets, files — OS-adjacent primitives |
+| Cloud backend | **Go** | Control-plane services, operators, APIs that talk to K8s / cloud APIs |
+| Frontend | **TypeScript + React + Next.js** | Dashboard, developer portal |
+| Automation | **Python** | Scripts, AI, testing, FastAPI control-plane API (today) |
+| Performance components | **Rust** | Hot paths: security, storage engines, networking |
+
+```
+C          ──► system core
+Go         ──► cloud backend / operators
+TypeScript ──► Next.js dashboard (+ CLI / SDK)
+Python     ──► automation · AI · tests · API
+Rust       ──► performance · security · storage · net
+```
+
+### Runtime & data plane
+
+| Technology | Role |
+|---|---|
+| **Redis** | Cache, sessions, rate-limit counters, hot keys |
+| **MinIO** | S3-compatible object storage |
+| **Docker** | Images, volumes, networking, registry, BuildKit |
+| **Kubernetes** | Orchestration (Pods, Deployments, Services, Ingress, …) |
+| **Nginx** | Reverse proxy / TLS / edge routing |
+| **Prometheus + Grafana** | Metrics and dashboards |
+| **Loki** | Log aggregation (pairs with Grafana) |
+| **NATS** | High-throughput messaging / fan-out |
+| **RabbitMQ** | Work queues, durable async jobs |
+| **Terraform** | Infrastructure as code |
+| **Ubuntu Server** | Host OS for nodes and bastions |
+
+### Control plane (today)
 
 | Layer | Choice |
 |---|---|
-| API | Python, FastAPI, Mangum (Netlify serverless) |
-| Dashboard | Next.js 14 (App Router) on Vercel |
-| CLI | Commander.js |
-| Compute | Kubernetes (AWS EKS) — provisioning wired, cluster not production yet |
-| Database | MongoDB. Atlas in prod, `docker compose` locally |
-| Billing | IremboPay (customer id on tenant; charges not wired) |
-| Auth | JWT (dashboard) + hashed API keys (CLI) |
+| API | Python FastAPI (+ Mangum on Netlify) |
+| Dashboard / CLI / SDK | TypeScript (Next.js 14, Commander.js) |
+| Control-plane DB | MongoDB (Atlas in prod, `docker compose` locally) |
+| Auth | JWT + hashed API keys |
+| Billing | IremboPay (customer id reserved; charges not wired) |
+
+```
+[Client: Next.js / CLI / SDK]
+        │
+        ▼
+   Nginx (reverse proxy)
+        │
+        ▼
+   Go / Python backends ── Redis · NATS · RabbitMQ
+        │
+        ├── MinIO (object storage)
+        ├── Kubernetes (Docker workloads)
+        └── Prometheus · Grafana · Loki
+                ▲
+         Ubuntu Server + Terraform
+```
 
 ## Repo
 
 ```
 cloudlane/
 ├── apps/
-│   ├── api_python/   # FastAPI control plane (Netlify)
+│   ├── api_python/   # Python FastAPI control plane (Netlify)
 │   ├── api/          # legacy Node API (deprecated)
-│   └── dashboard/    # Next.js dashboard (Vercel)
+│   └── dashboard/    # TypeScript Next.js dashboard (Vercel)
 ├── packages/
-│   ├── cli/          # `cloudlane` CLI
+│   ├── cli/          # TypeScript `cloudlane` CLI
 │   └── shared/       # Shared TypeScript types
 ├── docs/DEPLOYMENT.md
 ├── docker-compose.yml   # local Mongo
 └── README.md
 ```
+
+Planned: Go operators / Terraform, Rust storage & networking crates, C system primitives.
 
 ## Local
 
@@ -142,18 +378,25 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 
 ### Phase 1 — Core deploy loop
 - [x] Multi-tenant Mongo ERD (tenants, users, deployments, api_keys, audit_logs, usage_metrics)
-- [x] JWT + API key auth
-- [x] Dashboard signup/login + deploy modal
-- [x] CLI (`login`, `deploy`, `logs`, `list`)
-- [ ] K8s cluster in production (API already calls namespace / deploy / service / ingress)
+- [x] JWT + API key auth (+ scopes on deploy routes)
+- [x] Dashboard signup/login + deploy modal + **console** (`/dashboard/console`)
+- [x] CLI (`login` returns API key, `deploy`, `logs`, `list`)
+- [x] K8s Service + Ingress in Python API (honest `pending`/`failed` without cluster)
+- [x] Deployment list, get, soft-delete, logs stub/stream
+- [x] Projects collection + APIs + dashboard project switcher
+- [x] API keys dashboard (create/revoke, plaintext once)
+- [x] MinIO in compose + bucket APIs + dashboard storage tab
+- [x] Usage metering (`compute_seconds`) + billing/invoices + IremboPay sandbox
+- [x] Monitoring summary + usage charts in console; Prometheus/Grafana in compose
+- [x] VM lifecycle API (stub IP; hypervisor deferred)
 - [ ] Scale-to-zero (KEDA)
-- [ ] IremboPay charges (field reserved)
+- [ ] IremboPay production charges
 
 ### Phase 2 — Polish
-- Usage graphs in dashboard, audit log viewer, quotas from `tenants.limits`, alerting
+- Audit log viewer, quotas UI from `tenants.limits`, alerting, Loki
 
 ### Phase 3 — Broader surface
-- Object storage, managed Postgres for customers, secrets vault, custom domains, orgs
+- Managed Postgres for customers, secrets vault, custom domains, orgs/IAM depth
 
 ## Design principles
 
@@ -164,4 +407,4 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 
 ## Status
 
-MVP in progress. **FastAPI** control plane replaces legacy Node API. Dashboard + auth + ERD routes ready; point Netlify base dir to `apps/api_python` and redeploy.
+V1 control-plane surfaces implemented in **FastAPI** + **Next dashboard console**. Local stack: `docker compose up` (Mongo, MinIO, Prometheus, Grafana). Point Netlify base dir to `apps/api_python` and redeploy.

@@ -125,7 +125,57 @@ def map_deployment(doc: dict[str, Any]) -> dict[str, Any]:
         'publicUrl': public_url or '',
         'k8sNamespace': doc.get('k8sNamespace') or doc.get('kubernetesNamespace', ''),
         'port': doc.get('port', 8080),
+        'projectId': ref_str(doc['projectId']) if doc.get('projectId') else None,
         'deletedAt': doc.get('deletedAt'),
+        'createdAt': doc.get('createdAt'),
+    }
+
+
+def map_project(doc: dict[str, Any]) -> dict[str, Any]:
+    return {
+        'id': ref_str(doc['_id']),
+        'tenantId': ref_str(doc['tenantId']),
+        'name': doc['name'],
+        'slug': doc['slug'],
+        'createdAt': doc.get('createdAt'),
+    }
+
+
+def map_bucket(doc: dict[str, Any]) -> dict[str, Any]:
+    return {
+        'id': ref_str(doc['_id']),
+        'tenantId': ref_str(doc['tenantId']),
+        'projectId': ref_str(doc['projectId']) if doc.get('projectId') else None,
+        'name': doc['name'],
+        'createdAt': doc.get('createdAt'),
+    }
+
+
+def map_invoice(doc: dict[str, Any]) -> dict[str, Any]:
+    return {
+        'id': ref_str(doc['_id']),
+        'tenantId': ref_str(doc['tenantId']),
+        'periodStart': doc['periodStart'],
+        'periodEnd': doc['periodEnd'],
+        'totalAmount': doc['totalAmount'],
+        'currency': doc.get('currency', 'RWF'),
+        'status': doc['status'],
+        'irembopayTransactionId': doc.get('irembopayTransactionId'),
+        'breakdown': doc.get('breakdown') or {},
+        'createdAt': doc.get('createdAt'),
+    }
+
+
+def map_vm(doc: dict[str, Any]) -> dict[str, Any]:
+    return {
+        'id': ref_str(doc['_id']),
+        'tenantId': ref_str(doc['tenantId']),
+        'projectId': ref_str(doc['projectId']) if doc.get('projectId') else None,
+        'name': doc['name'],
+        'cpu': doc.get('cpu', 1),
+        'memoryMb': doc.get('memoryMb', 512),
+        'status': doc['status'],
+        'publicIp': doc.get('publicIp'),
         'createdAt': doc.get('createdAt'),
     }
 
@@ -220,6 +270,10 @@ def ensure_indexes() -> None:
     api_keys = col('api_keys')
     audit_logs = col('audit_logs')
     usage_metrics = col('usage_metrics')
+    projects = col('projects')
+    buckets = col('buckets')
+    invoices = col('invoices')
+    vms = col('vms')
     tenants.create_index('slug', unique=True)
     users.create_index('email', unique=True)
     users.create_index('tenantId')
@@ -231,6 +285,10 @@ def ensure_indexes() -> None:
     api_keys.create_index('userId')
     audit_logs.create_index([('tenantId', 1), ('createdAt', -1)])
     usage_metrics.create_index([('tenantId', 1), ('deploymentId', 1), ('windowStart', -1)])
+    projects.create_index([('tenantId', 1), ('slug', 1)], unique=True)
+    buckets.create_index([('tenantId', 1), ('name', 1)], unique=True)
+    invoices.create_index([('tenantId', 1), ('createdAt', -1)])
+    vms.create_index([('tenantId', 1), ('name', 1)])
 
 
 def find_user_by_email(email: str) -> dict[str, Any] | None:
@@ -313,6 +371,7 @@ def create_deployment(input_data: dict[str, Any]) -> dict[str, Any]:
         'publicUrl': input_data['publicUrl'],
         'k8sNamespace': input_data['k8sNamespace'],
         'port': input_data['port'],
+        'projectId': oid_or_raw(input_data['projectId']) if input_data.get('projectId') else None,
         'deletedAt': None,
         'createdAt': now,
     }
@@ -427,3 +486,185 @@ def list_usage_metrics(tenant_id: str, deployment_id: str | None = None, limit: 
     safe_limit = min(max(limit, 1), 500)
     docs = col('usage_metrics').find(filt).sort('windowStart', -1).limit(safe_limit)
     return [map_usage_metric(doc) for doc in docs]
+
+
+def find_tenant(tenant_id: str) -> dict[str, Any] | None:
+    if not is_object_id_string(tenant_id):
+        return None
+    doc = col('tenants').find_one({'_id': as_object_id(tenant_id)})
+    return map_tenant(doc) if doc else None
+
+
+def count_deployments(tenant_id: str) -> int:
+    return col('deployments').count_documents({
+        **tenant_clause(tenant_id),
+        '$or': [{'deletedAt': None}, {'deletedAt': {'$exists': False}}],
+    })
+
+
+def find_deployment_by_name(name: str, tenant_id: str) -> dict[str, Any] | None:
+    doc = col('deployments').find_one({
+        'name': name,
+        **tenant_clause(tenant_id),
+        '$or': [{'deletedAt': None}, {'deletedAt': {'$exists': False}}],
+    })
+    return map_deployment(doc) if doc else None
+
+
+def soft_delete_deployment(deployment_id: str, tenant_id: str) -> bool:
+    if not is_object_id_string(deployment_id):
+        return False
+    result = col('deployments').update_one(
+        {'_id': as_object_id(deployment_id), **tenant_clause(tenant_id)},
+        {'$set': {'status': 'stopped', 'deletedAt': datetime.now(timezone.utc)}},
+    )
+    return result.modified_count == 1
+
+
+def list_projects(tenant_id: str) -> list[dict[str, Any]]:
+    docs = col('projects').find(tenant_clause(tenant_id)).sort('createdAt', -1)
+    return [map_project(doc) for doc in docs]
+
+
+def find_project_by_id(project_id: str, tenant_id: str) -> dict[str, Any] | None:
+    if not is_object_id_string(project_id):
+        return None
+    doc = col('projects').find_one({'_id': as_object_id(project_id), **tenant_clause(tenant_id)})
+    return map_project(doc) if doc else None
+
+
+def create_project(tenant_id: str, name: str, slug: str) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    doc = {'tenantId': oid_or_raw(tenant_id), 'name': name, 'slug': slug, 'createdAt': now}
+    result = col('projects').insert_one(doc)
+    doc['_id'] = result.inserted_id
+    return map_project(doc)
+
+
+def get_or_create_default_project(tenant_id: str) -> dict[str, Any]:
+    existing = col('projects').find_one({**tenant_clause(tenant_id), 'slug': 'default'})
+    if existing:
+        return map_project(existing)
+    return create_project(tenant_id, 'Default', 'default')
+
+
+def migrate_deployments_to_default_project(tenant_id: str, project_id: str) -> None:
+    col('deployments').update_many(
+        {**tenant_clause(tenant_id), 'projectId': {'$exists': False}},
+        {'$set': {'projectId': oid_or_raw(project_id)}},
+    )
+
+
+def list_buckets(tenant_id: str, project_id: str | None = None) -> list[dict[str, Any]]:
+    filt: dict[str, Any] = {**tenant_clause(tenant_id)}
+    if project_id:
+        filt['projectId'] = oid_or_raw(project_id)
+    docs = col('buckets').find(filt).sort('createdAt', -1)
+    return [map_bucket(doc) for doc in docs]
+
+
+def create_bucket(tenant_id: str, project_id: str, name: str) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    doc = {
+        'tenantId': oid_or_raw(tenant_id),
+        'projectId': oid_or_raw(project_id),
+        'name': name,
+        'createdAt': now,
+    }
+    result = col('buckets').insert_one(doc)
+    doc['_id'] = result.inserted_id
+    return map_bucket(doc)
+
+
+def find_bucket_by_name(name: str, tenant_id: str) -> dict[str, Any] | None:
+    doc = col('buckets').find_one({'name': name, **tenant_clause(tenant_id)})
+    return map_bucket(doc) if doc else None
+
+
+def create_invoice(input_data: dict[str, Any]) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    doc = {
+        'tenantId': oid_or_raw(input_data['tenantId']),
+        'periodStart': input_data['periodStart'],
+        'periodEnd': input_data['periodEnd'],
+        'totalAmount': input_data['totalAmount'],
+        'currency': input_data.get('currency', 'RWF'),
+        'status': input_data.get('status', 'pending'),
+        'irembopayTransactionId': input_data.get('irembopayTransactionId'),
+        'breakdown': input_data.get('breakdown') or {},
+        'createdAt': now,
+    }
+    result = col('invoices').insert_one(doc)
+    doc['_id'] = result.inserted_id
+    return map_invoice(doc)
+
+
+def list_invoices(tenant_id: str, limit: int = 20) -> list[dict[str, Any]]:
+    docs = col('invoices').find(tenant_clause(tenant_id)).sort('createdAt', -1).limit(limit)
+    return [map_invoice(doc) for doc in docs]
+
+
+def update_invoice(invoice_id: str, tenant_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    if not is_object_id_string(invoice_id):
+        return None
+    doc = col('invoices').find_one_and_update(
+        {'_id': as_object_id(invoice_id), **tenant_clause(tenant_id)},
+        {'$set': updates},
+        return_document=True,
+    )
+    return map_invoice(doc) if doc else None
+
+
+def sum_usage_for_tenant(tenant_id: str, metric_type: str = 'compute_seconds') -> float:
+    pipeline = [
+        {'$match': {**tenant_clause(tenant_id), 'metricType': metric_type}},
+        {'$group': {'_id': None, 'total': {'$sum': '$value'}}},
+    ]
+    result = list(col('usage_metrics').aggregate(pipeline))
+    return float(result[0]['total']) if result else 0.0
+
+
+def list_vms(tenant_id: str, project_id: str | None = None) -> list[dict[str, Any]]:
+    filt: dict[str, Any] = {**tenant_clause(tenant_id)}
+    if project_id:
+        filt['projectId'] = oid_or_raw(project_id)
+    docs = col('vms').find(filt).sort('createdAt', -1)
+    return [map_vm(doc) for doc in docs]
+
+
+def create_vm(input_data: dict[str, Any]) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    doc = {
+        'tenantId': oid_or_raw(input_data['tenantId']),
+        'projectId': oid_or_raw(input_data['projectId']) if input_data.get('projectId') else None,
+        'name': input_data['name'],
+        'cpu': input_data.get('cpu', 1),
+        'memoryMb': input_data.get('memoryMb', 512),
+        'status': 'provisioning',
+        'publicIp': None,
+        'createdAt': now,
+    }
+    result = col('vms').insert_one(doc)
+    doc['_id'] = result.inserted_id
+    doc['status'] = 'running'
+    col('vms').update_one({'_id': result.inserted_id}, {'$set': {'status': 'running', 'publicIp': '10.0.0.1'}})
+    doc['publicIp'] = '10.0.0.1'
+    return map_vm(doc)
+
+
+def update_vm_status(vm_id: str, tenant_id: str, status: str) -> dict[str, Any] | None:
+    if not is_object_id_string(vm_id):
+        return None
+    doc = col('vms').find_one_and_update(
+        {'_id': as_object_id(vm_id), **tenant_clause(tenant_id)},
+        {'$set': {'status': status}},
+        return_document=True,
+    )
+    return map_vm(doc) if doc else None
+
+
+def find_api_key_record(key_id: str, tenant_id: str) -> dict[str, Any] | None:
+    if not is_object_id_string(key_id):
+        return None
+    doc = col('api_keys').find_one({'_id': as_object_id(key_id), **tenant_clause(tenant_id)})
+    return map_api_key(doc) if doc else None

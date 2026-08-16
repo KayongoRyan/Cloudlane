@@ -43,6 +43,7 @@ export default function SignupPage() {
       }
 
       localStorage.setItem('token', data.token)
+      if (data.apiKey) localStorage.setItem('apiKey', data.apiKey)
       router.push('/dashboard')
     } catch (err: any) {
       if (err instanceof TypeError && err.message === 'Failed to fetch') {

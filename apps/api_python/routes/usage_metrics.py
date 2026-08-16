@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 import database as db
-from auth import AuthContext, authenticate_request
+from auth import AuthContext, authenticate_request, require_scopes
 from schemas import UsageMetricCreate
 
 router = APIRouter()
@@ -23,13 +23,13 @@ async def list_metrics(
     deploymentId: str | None = Query(default=None),
     limit: int = Query(default=100, ge=1, le=500),
 ):
+    require_scopes(auth, 'read')
     return {'usageMetrics': db.list_usage_metrics(auth.tenant_id, deploymentId, limit)}
 
 
 @router.post('/', status_code=status.HTTP_201_CREATED)
 async def create_metric(payload: UsageMetricCreate, request: Request, auth: AuthContext = Depends(authenticate_request)):
-    if not auth.user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Unauthorized')
+    require_scopes(auth, 'deploy')
 
     if payload.metricType not in METRIC_TYPES:
         raise HTTPException(

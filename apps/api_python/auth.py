@@ -22,6 +22,18 @@ class AuthContext:
     tenant_id: str
     user_id: str | None = None
     role: str | None = None
+    scopes: list[str] | None = None
+
+
+def require_scopes(auth: AuthContext, *needed: str) -> None:
+    if auth.role == 'admin' and not auth.scopes:
+        return
+    scopes = auth.scopes or ['deploy', 'read']
+    if not any(s in scopes for s in needed):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f'Insufficient scope — requires one of: {", ".join(needed)}',
+        )
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -57,7 +69,11 @@ async def authenticate_request(
         if not record:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Invalid API key')
         mark_api_key_used(record['id'])
-        return AuthContext(tenant_id=record['tenantId'], user_id=record.get('userId'))
+        return AuthContext(
+            tenant_id=record['tenantId'],
+            user_id=record.get('userId'),
+            scopes=record.get('scopes') or ['deploy', 'read'],
+        )
 
     if not credentials or credentials.scheme.lower() != 'bearer':
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Missing or invalid authorization header')
@@ -76,7 +92,7 @@ async def authenticate_request(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='User not found')
 
-    return AuthContext(tenant_id=tenant_id, user_id=user_id, role=role or user['role'])
+    return AuthContext(tenant_id=tenant_id, user_id=user_id, role=role or user['role'], scopes=['deploy', 'read'])
 
 
 def client_ip(request: Request) -> str | None:

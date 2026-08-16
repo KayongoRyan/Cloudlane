@@ -1430,6 +1430,12 @@ button {
   animation: cl-status-pulse 2.4s ease-in-out infinite;
 }
 
+.cl-footer-status-dot.is-down {
+  background: #e07a6a;
+  box-shadow: 0 0 0 3px rgba(224, 122, 106, 0.25);
+  animation: none;
+}
+
 @keyframes cl-status-pulse {
   0%,
   100% {
@@ -1798,4 +1804,189 @@ button {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* ——— Console ——— */
+.cl-console-shell {
+  min-height: 100vh;
+  background: var(--cl-surface);
+}
+
+.cl-console-top {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem clamp(1.25rem, 4vw, 3rem);
+  border-bottom: 1px solid var(--cl-stroke);
+  background: var(--cl-white);
+}
+
+.cl-console-project {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: var(--cl-muted);
+}
+
+.cl-console-project select {
+  height: 2.25rem;
+  padding: 0 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--cl-stroke);
+  background: var(--cl-white);
+  color: var(--cl-ink);
+}
+
+.cl-console-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  padding: 0.75rem clamp(1.25rem, 4vw, 3rem);
+  border-bottom: 1px solid var(--cl-stroke);
+  background: var(--cl-white);
+}
+
+.cl-console-tabs button {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--cl-muted);
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cl-console-tabs button.is-active {
+  background: var(--cl-sage-soft);
+  color: var(--cl-forest-deep);
+  border-color: var(--cl-stroke);
+}
+
+.cl-console-sub {
+  margin: 0.25rem 0 0;
+  color: var(--cl-muted);
+  font-size: 0.9rem;
+}
+
+.cl-console-inline-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.cl-console-inline-form input {
+  height: 2.5rem;
+  padding: 0 0.75rem;
+  border: 1px solid var(--cl-stroke);
+  border-radius: 10px;
+  background: var(--cl-white);
+}
+
+.cl-console-actions {
+  margin-bottom: 1rem;
+}
+
+.cl-console-row-action {
+  justify-self: end;
+  border: 1px solid var(--cl-stroke);
+  background: var(--cl-white);
+  border-radius: 8px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.gcp-table-row.cl-table-2 {
+  grid-template-columns: 1fr 1fr auto;
+}
+
+.gcp-table-row.cl-table-3 {
+  grid-template-columns: 1fr 1fr 1fr auto;
+}
+
+.gcp-table-row.cl-table-4 {
+  grid-template-columns: 1fr 0.5fr 0.7fr 0.7fr 0.7fr auto;
+}
+
+.cl-console-empty {
+  grid-column: 1 / -1;
+  color: var(--cl-muted);
+}
+
+.cl-key-reveal {
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  background: var(--cl-sage-soft);
+  border: 1px solid var(--cl-stroke);
+}
+
+.cl-key-reveal code {
+  display: block;
+  margin-top: 0.35rem;
+  word-break: break-all;
+  font-size: 0.85rem;
+}
+
+.cl-billing-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.cl-billing-cards article {
+  padding: 1rem;
+  border: 1px solid var(--cl-stroke);
+  border-radius: 12px;
+  background: var(--cl-surface);
+}
+
+.cl-billing-stat {
+  margin: 0.25rem 0 0;
+  font-family: var(--font-display), "Syne", sans-serif;
+  font-size: 1.35rem;
+  color: var(--cl-ink);
+}
+
+.cl-metrics-chart {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.cl-metrics-bar {
+  display: grid;
+  grid-template-columns: 8rem 1fr 4rem;
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.88rem;
+}
+
+.cl-metrics-bar div {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--cl-grey);
+  overflow: hidden;
+}
+
+.cl-metrics-bar i {
+  display: block;
+  height: 100%;
+  background: var(--cl-forest);
+  border-radius: inherit;
+}
+
+.gcp-muted {
+  color: var(--cl-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gcp-table-row:not(.gcp-table-head) {
+  grid-template-columns: 1.1fr 1.4fr 1.4fr 0.7fr auto;
 }

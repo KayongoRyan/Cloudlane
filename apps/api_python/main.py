@@ -12,6 +12,11 @@ from routes.api_keys import router as api_keys_router
 from routes.audit_logs import router as audit_logs_router
 from routes.usage_metrics import router as usage_metrics_router
 from routes.health import router as health_router
+from routes.projects import router as projects_router
+from routes.buckets import router as buckets_router
+from routes.billing import router as billing_router
+from routes.monitoring import router as monitoring_router
+from routes.vms import router as vms_router
 
 settings = get_settings()
 
@@ -45,7 +50,12 @@ app.add_middleware(
 
 app.include_router(auth_router, prefix='/api/auth', tags=['auth'])
 app.include_router(deployments_router, prefix='/api/deployments', tags=['deployments'])
+app.include_router(projects_router, prefix='/api/projects', tags=['projects'])
 app.include_router(api_keys_router, prefix='/api/api-keys', tags=['api-keys'])
+app.include_router(buckets_router, prefix='/api/buckets', tags=['buckets'])
+app.include_router(billing_router, prefix='/api/billing', tags=['billing'])
+app.include_router(monitoring_router, prefix='/api/monitoring', tags=['monitoring'])
+app.include_router(vms_router, prefix='/api/vms', tags=['vms'])
 app.include_router(audit_logs_router, prefix='/api/audit-logs', tags=['audit-logs'])
 app.include_router(usage_metrics_router, prefix='/api/usage-metrics', tags=['usage-metrics'])
 app.include_router(health_router, tags=['health'])
