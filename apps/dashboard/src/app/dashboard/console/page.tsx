@@ -4,9 +4,13 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import Logo from '../../../components/Logo'
+import ConsoleNav, {
+  PRODUCT_IDS,
+  SERVICE_LABELS,
+  getRecentServices,
+  type ServiceId,
+} from '../../../components/ConsoleNav'
 import { getApiBase } from '../../../lib/api'
-
-type Tab = 'deployments' | 'projects' | 'keys' | 'storage' | 'billing' | 'monitoring' | 'vms'
 
 interface Project {
   id: string
@@ -62,6 +66,13 @@ interface MonitoringSummary {
   recentMetrics: { metricType: string; value: number; windowStart: string }[]
 }
 
+interface AuditLog {
+  id: string
+  action: string
+  resourceType: string
+  createdAt?: string
+}
+
 function authHeaders(): HeadersInit {
   const token = localStorage.getItem('token')
   return {
@@ -97,7 +108,9 @@ async function apiSend<T = unknown>(path: string, method: string, body?: unknown
 
 export default function ConsolePage() {
   const router = useRouter()
-  const [tab, setTab] = useState<Tab>('deployments')
+  const [tab, setTab] = useState<ServiceId>('overview')
+  const [navOpen, setNavOpen] = useState(false)
+  const [recent, setRecent] = useState<ServiceId[]>([])
   const [projectId, setProjectId] = useState<string>('')
   const [error, setError] = useState('')
   const [newKey, setNewKey] = useState<string | null>(null)
@@ -135,8 +148,17 @@ export default function ConsolePage() {
     ['console-deployments', projectId],
     () => fetcher<{ deployments: Deployment[] }>(`/api/deployments${projectQuery}`),
   )
+  useEffect(() => {
+    document.body.classList.toggle('nav-lock', navOpen)
+    return () => document.body.classList.remove('nav-lock')
+  }, [navOpen])
+
+  useEffect(() => {
+    if (tab === 'recent') setRecent(getRecentServices())
+  }, [tab])
+
   const { data: keysData, mutate: mutateKeys } = useSWR(
-    tab === 'keys' ? 'console-keys' : null,
+    tab === 'apis' || tab === 'agent' ? 'console-keys' : null,
     () => fetcher<{ apiKeys: ApiKeyRow[] }>('/api/api-keys'),
   )
   const { data: bucketsData, mutate: mutateBuckets } = useSWR(
@@ -144,7 +166,7 @@ export default function ConsolePage() {
     () => fetcher<{ buckets: Bucket[] }>(`/api/buckets${projectQuery}`),
   )
   const { data: billingUsage, mutate: mutateBilling } = useSWR(
-    tab === 'billing' ? 'console-usage' : null,
+    tab === 'billing' || tab === 'overview' || tab === 'hub' ? 'console-usage' : null,
     () => fetcher<{ usage: { computeSeconds: number; estimatedCost: number; currency: string } }>('/api/billing/usage'),
   )
   const { data: invoicesData, mutate: mutateInvoices } = useSWR(
@@ -152,12 +174,16 @@ export default function ConsolePage() {
     () => fetcher<{ invoices: Invoice[] }>('/api/billing/invoices'),
   )
   const { data: monitoring, mutate: mutateMonitoring } = useSWR(
-    tab === 'monitoring' ? 'console-monitoring' : null,
+    tab === 'monitoring' || tab === 'overview' || tab === 'hub' ? 'console-monitoring' : null,
     () => fetcher<MonitoringSummary>('/api/monitoring/summary'),
   )
   const { data: vmsData, mutate: mutateVms } = useSWR(
-    tab === 'vms' ? ['console-vms', projectId] : null,
+    tab === 'compute' || tab === 'overview' ? ['console-vms', projectId] : null,
     () => fetcher<{ vms: Vm[] }>(`/api/vms${projectQuery}`),
+  )
+  const { data: auditData } = useSWR(
+    tab === 'security' ? 'console-audit' : null,
+    () => fetcher<{ auditLogs: AuditLog[] }>('/api/audit-logs'),
   )
 
   const deployments = depData?.deployments ?? []
@@ -294,19 +320,30 @@ export default function ConsolePage() {
     }
   }
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'deployments', label: 'Deployments' },
-    { id: 'projects', label: 'Projects' },
-    { id: 'keys', label: 'API keys' },
-    { id: 'storage', label: 'Storage' },
-    { id: 'billing', label: 'Billing' },
-    { id: 'monitoring', label: 'Monitoring' },
-    { id: 'vms', label: 'VMs' },
-  ]
+  const openService = (id: ServiceId) => {
+    setTab(id)
+    setError('')
+    setNavOpen(false)
+  }
 
   return (
-    <div className="gcp-shell cl-console-shell">
+    <div className="gcp-shell cl-console-shell cl-gc-app">
+      {navOpen && (
+        <button type="button" className="cl-gc-scrim" aria-label="Close navigation" onClick={() => setNavOpen(false)} />
+      )}
+      <ConsoleNav active={tab} onSelect={openService} open={navOpen} onClose={() => setNavOpen(false)} />
+
+      <div className="cl-gc-main">
       <header className="cl-console-top">
+        <button
+          type="button"
+          className="cl-gc-menu"
+          aria-label={navOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={navOpen}
+          onClick={() => setNavOpen((v) => !v)}
+        >
+          <span /><span /><span />
+        </button>
         <a href="/dashboard" className="hero-sky-brand">
           <Logo size="sm" />
         </a>
@@ -331,26 +368,13 @@ export default function ConsolePage() {
         </button>
       </header>
 
-      <nav className="cl-console-tabs" aria-label="Console sections">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            className={tab === t.id ? 'is-active' : ''}
-            onClick={() => { setTab(t.id); setError('') }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
-
       <section className="gcp-console">
         <div className="gcp-console-inner">
           <div className="gcp-console-head">
             <div>
               <p className="gcp-kicker">Console</p>
-              <h2>{tabs.find((t) => t.id === tab)?.label}</h2>
-              {activeProject && tab !== 'projects' && tab !== 'keys' && (
+              <h2>{SERVICE_LABELS[tab]}</h2>
+              {activeProject && tab !== 'iam' && tab !== 'apis' && tab !== 'agent' && (
                 <p className="cl-console-sub">{activeProject.name}</p>
               )}
             </div>
@@ -358,7 +382,7 @@ export default function ConsolePage() {
 
           {error && <div className="gcp-form-error">{error}</div>}
 
-          {tab === 'deployments' && (
+          {(tab === 'run' || tab === 'kubernetes') && (
             <>
               <form className="cl-console-inline-form" onSubmit={handleDeploy}>
                 <input required placeholder="Service name" value={deployForm.name} onChange={(e) => setDeployForm({ ...deployForm, name: e.target.value })} />
@@ -390,7 +414,7 @@ export default function ConsolePage() {
             </>
           )}
 
-          {tab === 'projects' && (
+          {tab === 'iam' && (
             <>
               <form className="cl-console-inline-form" onSubmit={handleCreateProject}>
                 <input required placeholder="Project name" value={projectName} onChange={(e) => setProjectName(e.target.value)} />
@@ -410,10 +434,12 @@ export default function ConsolePage() {
             </>
           )}
 
-          {tab === 'keys' && (
+          {(tab === 'apis' || tab === 'agent') && (
             <>
               <div className="cl-console-actions">
-                <button type="button" className="gcp-btn-primary gcp-btn-compact" onClick={handleCreateKey} disabled={busy}>Create API key</button>
+                <button type="button" className="gcp-btn-primary gcp-btn-compact" onClick={handleCreateKey} disabled={busy}>
+                  {tab === 'agent' ? 'Get Agent Platform API key' : 'Create API key'}
+                </button>
               </div>
               {newKey && (
                 <div className="cl-key-reveal">
@@ -514,7 +540,7 @@ export default function ConsolePage() {
             </>
           )}
 
-          {tab === 'vms' && (
+          {tab === 'compute' && (
             <>
               <form className="cl-console-inline-form" onSubmit={handleCreateVm}>
                 <input required placeholder="VM name" value={vmForm.name} onChange={(e) => setVmForm({ ...vmForm, name: e.target.value })} />
@@ -543,8 +569,112 @@ export default function ConsolePage() {
               </div>
             </>
           )}
+
+          {tab === 'overview' && (
+            <div className="cl-gc-overview">
+              <div className="cl-billing-cards">
+                <article>
+                  <p className="gcp-kicker">Cloud Run</p>
+                  <p className="cl-billing-stat">{monitoring?.deployments.running ?? deployments.filter((d) => d.status === 'running').length}/{monitoring?.deployments.total ?? deployments.length}</p>
+                  <button type="button" className="cl-text-link" onClick={() => openService('run')}>Open</button>
+                </article>
+                <article>
+                  <p className="gcp-kicker">Compute Engine</p>
+                  <p className="cl-billing-stat">{vmsData?.vms.length ?? 0}</p>
+                  <button type="button" className="cl-text-link" onClick={() => openService('compute')}>Open</button>
+                </article>
+                <article>
+                  <p className="gcp-kicker">Estimated</p>
+                  <p className="cl-billing-stat">{billingUsage?.usage.estimatedCost ?? 0} {billingUsage?.usage.currency ?? 'RWF'}</p>
+                  <button type="button" className="cl-text-link" onClick={() => openService('billing')}>Billing</button>
+                </article>
+              </div>
+            </div>
+          )}
+
+          {tab === 'hub' && (
+            <div className="cl-gc-hub">
+              {PRODUCT_IDS.map((id) => (
+                <button type="button" key={id} className="cl-gc-hub-card" onClick={() => openService(id)}>
+                  {SERVICE_LABELS[id]}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {tab === 'recent' && (
+            <div className="gcp-table">
+              <div className="gcp-table-row gcp-table-head cl-table-2">
+                <span>Service</span><span></span>
+              </div>
+              {recent.length === 0 && (
+                <div className="gcp-table-row cl-console-empty">Nothing visited yet — pick a product from the sidebar.</div>
+              )}
+              {recent.map((id) => (
+                <button type="button" key={id} className="gcp-table-row cl-table-2 cl-gc-recent-row" onClick={() => openService(id)}>
+                  <span className="gcp-service">{SERVICE_LABELS[id]}</span>
+                  <span className="gcp-muted">Open</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {tab === 'security' && (
+            <div className="gcp-table">
+              <div className="gcp-table-row gcp-table-head cl-table-3">
+                <span>Action</span><span>Resource</span><span>When</span>
+              </div>
+              {(auditData?.auditLogs ?? []).length === 0 && (
+                <div className="gcp-table-row cl-console-empty">No audit events yet.</div>
+              )}
+              {(auditData?.auditLogs ?? []).map((log) => (
+                <div key={log.id} className="gcp-table-row cl-table-3">
+                  <span className="gcp-service">{log.action}</span>
+                  <span className="gcp-muted">{log.resourceType}</span>
+                  <span className="gcp-muted">{log.createdAt ? new Date(log.createdAt).toLocaleString() : '—'}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {tab === 'solutions' && (
+            <div className="cl-gc-stub">
+              <p>Blueprints for API backends, staging previews, and scale-to-zero workers. Pick a product from the sidebar to start.</p>
+            </div>
+          )}
+
+          {tab === 'marketplace' && (
+            <div className="cl-gc-stub">
+              <p>Third-party images and add-ons will land here. Deploy from Cloud Run in the meantime.</p>
+            </div>
+          )}
+
+          {tab === 'bigquery' && (
+            <div className="cl-gc-stub">
+              <p>Warehouse queries aren&apos;t wired yet. Usage metrics live under Monitoring.</p>
+            </div>
+          )}
+
+          {tab === 'vpc' && (
+            <div className="cl-gc-stub">
+              <p>Per-tenant network isolation is on the control plane. VPC rules UI comes next.</p>
+            </div>
+          )}
+
+          {tab === 'databases' && (
+            <div className="cl-gc-stub">
+              <p>Managed database catalog. Cloud SQL will be the first engine.</p>
+            </div>
+          )}
+
+          {tab === 'sql' && (
+            <div className="cl-gc-stub">
+              <p>Managed Postgres/MySQL isn&apos;t provisioned yet. Use Cloud Storage for object data today.</p>
+            </div>
+          )}
         </div>
       </section>
+      </div>
     </div>
   )
 }

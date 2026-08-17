@@ -1990,3 +1990,265 @@ button {
 .gcp-table-row:not(.gcp-table-head) {
   grid-template-columns: 1.1fr 1.4fr 1.4fr 0.7fr auto;
 }
+
+/* ——— Console nav ——— */
+.cl-gc-app {
+  display: grid;
+  grid-template-columns: 272px minmax(0, 1fr);
+  min-height: 100vh;
+  background: var(--cl-surface);
+}
+
+.cl-gc-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.cl-gc-nav {
+  --nav-bg: var(--cl-white);
+  --nav-text: var(--cl-ink);
+  --nav-muted: var(--cl-muted);
+  --nav-line: var(--cl-stroke);
+  --nav-hover: var(--cl-surface);
+  --nav-active: var(--cl-sage-soft);
+  --nav-accent: var(--cl-forest);
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  background: var(--nav-bg);
+  color: var(--nav-text);
+  border-right: 1px solid var(--nav-line);
+  z-index: 40;
+}
+
+.cl-gc-nav-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem 0 1rem;
+}
+
+.cl-gc-nav-section {
+  padding: 0.35rem 0;
+}
+
+.cl-gc-nav-block {
+  padding: 0.85rem 0 0.35rem;
+  border-top: 1px solid var(--nav-line);
+}
+
+.cl-gc-nav-heading {
+  margin: 0 1rem 0.45rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--nav-text);
+}
+
+.cl-gc-nav-empty {
+  margin: 0 1rem 0.75rem;
+  font-size: 0.8rem;
+  color: var(--nav-muted);
+}
+
+.cl-gc-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: stretch;
+  position: relative;
+}
+
+.cl-gc-row.is-active {
+  background: var(--nav-active);
+}
+
+.cl-gc-row.is-active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--nav-accent);
+}
+
+.cl-gc-row-main {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 0.85rem 0 1rem;
+  border: 0;
+  background: transparent;
+  color: var(--nav-text);
+  text-align: left;
+  font-size: 0.875rem;
+}
+
+.cl-gc-row:hover .cl-gc-row-main,
+.cl-gc-row:hover {
+  background: var(--nav-hover);
+}
+
+.cl-gc-row.is-active:hover,
+.cl-gc-row.is-active:hover .cl-gc-row-main {
+  background: var(--nav-active);
+}
+
+.cl-gc-row-icon {
+  display: grid;
+  place-items: center;
+  color: var(--nav-text);
+}
+
+.cl-gc-row-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cl-gc-chevron {
+  color: var(--nav-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.cl-gc-star {
+  width: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--nav-muted);
+  font-size: 0.95rem;
+}
+
+.cl-gc-star.is-on {
+  color: #e2b93b;
+}
+
+.cl-gc-nav-foot {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.85rem 0.85rem 1rem;
+  border-top: 1px solid var(--nav-line);
+}
+
+.cl-gc-nav-cta {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 0.85rem;
+  border: 1px solid var(--nav-accent);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--cl-forest-deep);
+  font-size: 0.82rem;
+  font-weight: 650;
+  text-align: left;
+}
+
+.cl-gc-nav-cta:hover {
+  background: var(--nav-active);
+}
+
+.cl-gc-menu {
+  display: none;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  background: transparent;
+  padding: 10px 8px;
+}
+
+.cl-gc-menu span {
+  display: block;
+  height: 2px;
+  margin: 5px 0;
+  background: var(--cl-ink);
+  border-radius: 2px;
+}
+
+.cl-gc-scrim {
+  display: none;
+}
+
+.cl-gc-hub {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 0.65rem;
+}
+
+.cl-gc-hub-card {
+  min-height: 72px;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--cl-stroke);
+  border-radius: 10px;
+  background: var(--cl-surface);
+  color: var(--cl-ink);
+  font-weight: 650;
+  text-align: left;
+}
+
+.cl-gc-hub-card:hover {
+  border-color: var(--cl-forest);
+}
+
+.cl-gc-stub {
+  color: var(--cl-muted);
+  line-height: 1.5;
+}
+
+.cl-gc-recent-row {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--cl-stroke);
+  cursor: pointer;
+}
+
+.cl-console-shell .cl-console-top {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.cl-gc-app .gcp-console {
+  padding: 1.5rem clamp(1rem, 3vw, 2rem) 3rem;
+  flex: 1;
+}
+
+@media (max-width: 960px) {
+  .cl-gc-app {
+    grid-template-columns: 1fr;
+  }
+
+  .cl-gc-menu {
+    display: block;
+  }
+
+  .cl-gc-nav {
+    position: fixed;
+    left: 0;
+    top: 0;
+    width: min(280px, 86vw);
+    transform: translateX(-105%);
+    transition: transform 0.2s ease;
+  }
+
+  .cl-gc-nav.is-open {
+    transform: translateX(0);
+  }
+
+  .cl-gc-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    border: 0;
+    background: rgba(0, 0, 0, 0.45);
+  }
+}
