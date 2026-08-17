@@ -25,7 +25,10 @@ export {
   isProductStubTab,
   isSecurityStubTab,
   K8S_DEPLOY_TABS,
+  MONITORING_LIVE_TABS,
+  RUN_DEPLOY_TABS,
   SECURITY_AUDIT_TABS,
+  SQL_GET_STARTED_TABS,
   SERVICE_LABELS,
   SUBMENU_SECTIONS,
 } from './consoleNavMenus'

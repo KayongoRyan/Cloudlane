@@ -155,10 +155,54 @@ export type ServiceId =
   | 'bq-recommendations'
   | 'bq-migration-services'
   | 'monitoring'
+  | 'mon-overview'
+  | 'mon-dashboards'
+  | 'mon-applications'
+  | 'mon-metrics-explorer'
+  | 'mon-logs-explorer'
+  | 'mon-observability-analytics'
+  | 'mon-trace-explorer'
+  | 'mon-cost-explorer'
+  | 'mon-alerting'
+  | 'mon-error-reporting'
+  | 'mon-uptime-checks'
+  | 'mon-system-monitoring'
+  | 'mon-slos'
+  | 'mon-integrations'
+  | 'mon-log-metrics'
+  | 'mon-log-router'
+  | 'mon-log-storage'
+  | 'mon-metrics-mgmt'
+  | 'mon-groups'
+  | 'mon-settings'
+  | 'mon-permissions'
   | 'run'
+  | 'run-overview'
+  | 'run-services'
+  | 'run-jobs'
+  | 'run-worker-pools'
+  | 'run-domain-mappings'
   | 'vpc'
+  | 'vpc-networks'
+  | 'vpc-ip-addresses'
+  | 'vpc-internal-ranges'
+  | 'vpc-byoip'
+  | 'vpc-shared'
+  | 'vpc-serverless-access'
+  | 'vpc-packet-mirroring'
+  | 'vpc-flow-logs'
   | 'databases'
+  | 'db-overview'
+  | 'db-cloud-sql'
+  | 'db-alloydb'
+  | 'db-spanner'
+  | 'db-bigtable'
+  | 'db-firestore'
+  | 'db-memorystore'
   | 'sql'
+  | 'sql-get-started'
+  | 'sql-instances'
+  | 'sql-backups'
 
 export type SubMenuItem = { id: ServiceId; label: string }
 
@@ -324,10 +368,54 @@ export const SERVICE_LABELS: Record<ServiceId, string> = {
   'bq-recommendations': 'Recommendations',
   'bq-migration-services': 'Services',
   monitoring: 'Monitoring',
+  'mon-overview': 'Overview',
+  'mon-dashboards': 'Dashboards',
+  'mon-applications': 'Applications monitoring',
+  'mon-metrics-explorer': 'Metrics explorer',
+  'mon-logs-explorer': 'Logs explorer',
+  'mon-observability-analytics': 'Observability analytics',
+  'mon-trace-explorer': 'Trace explorer',
+  'mon-cost-explorer': 'Cost explorer',
+  'mon-alerting': 'Alerting',
+  'mon-error-reporting': 'Error reporting',
+  'mon-uptime-checks': 'Uptime checks',
+  'mon-system-monitoring': 'System monitoring',
+  'mon-slos': 'SLOs',
+  'mon-integrations': 'Integrations',
+  'mon-log-metrics': 'Log-based metrics',
+  'mon-log-router': 'Log router',
+  'mon-log-storage': 'Log storage',
+  'mon-metrics-mgmt': 'Metrics Management',
+  'mon-groups': 'Groups',
+  'mon-settings': 'Settings',
+  'mon-permissions': 'Permissions',
   run: 'Cloud Run',
+  'run-overview': 'Overview',
+  'run-services': 'Services',
+  'run-jobs': 'Jobs',
+  'run-worker-pools': 'Worker pools',
+  'run-domain-mappings': 'Domain mappings',
   vpc: 'VPC Network',
+  'vpc-networks': 'VPC networks',
+  'vpc-ip-addresses': 'IP addresses',
+  'vpc-internal-ranges': 'Internal Ranges',
+  'vpc-byoip': 'Bring your own IP',
+  'vpc-shared': 'Shared VPC',
+  'vpc-serverless-access': 'Serverless VPC access',
+  'vpc-packet-mirroring': 'Packet mirroring',
+  'vpc-flow-logs': 'VPC flow logs',
   databases: 'Databases',
+  'db-overview': 'Overview',
+  'db-cloud-sql': 'Cloud SQL',
+  'db-alloydb': 'AlloyDB for PostgreSQL',
+  'db-spanner': 'Spanner',
+  'db-bigtable': 'Bigtable',
+  'db-firestore': 'Firestore',
+  'db-memorystore': 'Memorystore',
   sql: 'Cloud SQL',
+  'sql-get-started': 'Get started',
+  'sql-instances': 'Instances',
+  'sql-backups': 'Backups',
 }
 
 export const SUBMENU_SECTIONS: Partial<Record<ServiceId, SubMenuSection[]>> = {
@@ -628,6 +716,100 @@ export const SUBMENU_SECTIONS: Partial<Record<ServiceId, SubMenuSection[]>> = {
       ],
     },
   ],
+  monitoring: [
+    {
+      items: [
+        { id: 'mon-overview', label: 'Overview' },
+        { id: 'mon-dashboards', label: 'Dashboards' },
+        { id: 'mon-applications', label: 'Applications monitoring' },
+      ],
+    },
+    {
+      title: 'Explore',
+      items: [
+        { id: 'mon-metrics-explorer', label: 'Metrics explorer' },
+        { id: 'mon-logs-explorer', label: 'Logs explorer' },
+        { id: 'mon-observability-analytics', label: 'Observability analytics' },
+        { id: 'mon-trace-explorer', label: 'Trace explorer' },
+        { id: 'mon-cost-explorer', label: 'Cost explorer' },
+      ],
+    },
+    {
+      title: 'Detect',
+      items: [
+        { id: 'mon-alerting', label: 'Alerting' },
+        { id: 'mon-error-reporting', label: 'Error detecting' },
+        { id: 'mon-uptime-checks', label: 'Uptime checks' },
+        { id: 'mon-system-monitoring', label: 'System monitoring' },
+        { id: 'mon-slos', label: 'SLOs' },
+      ],
+    },
+    {
+      title: 'Configure',
+      items: [
+        { id: 'mon-integrations', label: 'Integrations' },
+        { id: 'mon-log-metrics', label: 'Log-based metrics' },
+        { id: 'mon-log-router', label: 'Log router' },
+        { id: 'mon-log-storage', label: 'Log storage' },
+        { id: 'mon-metrics-mgmt', label: 'Metrics Management' },
+        { id: 'mon-groups', label: 'Groups' },
+        { id: 'mon-settings', label: 'Settings' },
+        { id: 'mon-permissions', label: 'Permissions' },
+      ],
+    },
+  ],
+  run: [
+    {
+      items: [
+        { id: 'run-overview', label: 'Overview' },
+        { id: 'run-services', label: 'Services' },
+        { id: 'run-jobs', label: 'Jobs' },
+        { id: 'run-worker-pools', label: 'Worker pools' },
+        { id: 'run-domain-mappings', label: 'Domain mappings' },
+      ],
+    },
+  ],
+  vpc: [
+    {
+      items: [
+        { id: 'vpc-networks', label: 'VPC networks' },
+        { id: 'vpc-ip-addresses', label: 'IP addresses' },
+        { id: 'vpc-internal-ranges', label: 'Internal Ranges' },
+        { id: 'vpc-byoip', label: 'Bring your own IP' },
+        { id: 'vpc-shared', label: 'Shared VPC' },
+        { id: 'vpc-serverless-access', label: 'Serverless VPC access' },
+        { id: 'vpc-packet-mirroring', label: 'Packet mirroring' },
+        { id: 'vpc-flow-logs', label: 'VPC flow logs' },
+      ],
+    },
+  ],
+  databases: [
+    {
+      items: [
+        { id: 'db-overview', label: 'Overview' },
+      ],
+    },
+    {
+      title: 'Products',
+      items: [
+        { id: 'db-cloud-sql', label: 'Cloud SQL' },
+        { id: 'db-alloydb', label: 'AlloyDB for PostgreSQL' },
+        { id: 'db-spanner', label: 'Spanner' },
+        { id: 'db-bigtable', label: 'Bigtable' },
+        { id: 'db-firestore', label: 'Firestore' },
+        { id: 'db-memorystore', label: 'Memorystore' },
+      ],
+    },
+  ],
+  sql: [
+    {
+      items: [
+        { id: 'sql-get-started', label: 'Get started' },
+        { id: 'sql-instances', label: 'Instances' },
+        { id: 'sql-backups', label: 'Backups' },
+      ],
+    },
+  ],
 }
 
 export function getSubmenuSections(id: ServiceId): SubMenuSection[] {
@@ -650,6 +832,15 @@ export function isActiveInMenu(active: ServiceId, parentId: ServiceId): boolean 
 export const IAM_PROJECT_TABS: ServiceId[] = ['iam', 'iam-iam', 'iam-create-project', 'iam-manage-resources']
 export const COMPUTE_VM_TABS: ServiceId[] = ['compute', 'compute-vm-instances']
 export const K8S_DEPLOY_TABS: ServiceId[] = ['kubernetes', 'k8s-clusters', 'k8s-workloads']
+export const RUN_DEPLOY_TABS: ServiceId[] = ['run', 'run-services']
+export const MONITORING_LIVE_TABS: ServiceId[] = [
+  'monitoring',
+  'mon-overview',
+  'mon-dashboards',
+  'mon-system-monitoring',
+  'hub-health',
+]
+export const SQL_GET_STARTED_TABS: ServiceId[] = ['sql', 'sql-get-started']
 export const SECURITY_AUDIT_TABS: ServiceId[] = [
   'security',
   'sec-scc-overview',
@@ -664,6 +855,9 @@ const OVERVIEW_TABS = new Set<ServiceId>([
   'sec-scc-overview',
   'bq-overview',
   'agent-overview',
+  'mon-overview',
+  'run-overview',
+  'db-overview',
 ])
 
 export function isIamStubTab(tab: ServiceId): boolean {
@@ -696,6 +890,26 @@ export function isBigQueryStubTab(tab: ServiceId): boolean {
   return tab.startsWith('bq-') && tab !== 'bq-overview'
 }
 
+export function isMonitoringStubTab(tab: ServiceId): boolean {
+  return tab.startsWith('mon-') && !MONITORING_LIVE_TABS.includes(tab)
+}
+
+export function isRunStubTab(tab: ServiceId): boolean {
+  return tab.startsWith('run-') && !RUN_DEPLOY_TABS.includes(tab)
+}
+
+export function isVpcStubTab(tab: ServiceId): boolean {
+  return tab.startsWith('vpc-')
+}
+
+export function isDatabasesStubTab(tab: ServiceId): boolean {
+  return tab.startsWith('db-') && tab !== 'db-overview' && tab !== 'db-cloud-sql'
+}
+
+export function isSqlStubTab(tab: ServiceId): boolean {
+  return tab.startsWith('sql-') && !SQL_GET_STARTED_TABS.includes(tab)
+}
+
 export function isOverviewTab(tab: ServiceId): boolean {
   return OVERVIEW_TABS.has(tab)
 }
@@ -708,4 +922,9 @@ export function isProductStubTab(tab: ServiceId): boolean {
     || isK8sStubTab(tab)
     || isSecurityStubTab(tab)
     || isBigQueryStubTab(tab)
+    || isMonitoringStubTab(tab)
+    || isRunStubTab(tab)
+    || isVpcStubTab(tab)
+    || isDatabasesStubTab(tab)
+    || isSqlStubTab(tab)
 }

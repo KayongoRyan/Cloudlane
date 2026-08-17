@@ -10,7 +10,10 @@ import ConsoleNav, {
   isOverviewTab,
   isProductStubTab,
   K8S_DEPLOY_TABS,
+  MONITORING_LIVE_TABS,
+  RUN_DEPLOY_TABS,
   SECURITY_AUDIT_TABS,
+  SQL_GET_STARTED_TABS,
   PRODUCT_IDS,
   SERVICE_LABELS,
   type ServiceId,
@@ -158,13 +161,14 @@ export default function ConsolePage() {
   }, [navOpen])
 
   const showDeployments =
-    tab === 'run' ||
+    RUN_DEPLOY_TABS.includes(tab) ||
     K8S_DEPLOY_TABS.includes(tab) ||
     tab === 'hub-deployments' ||
     tab === 'solutions-deployments'
 
   const showHubHome = tab === 'hub' || tab === 'hub-home'
-  const showMonitoring = tab === 'monitoring' || tab === 'hub-health'
+  const showMonitoring = MONITORING_LIVE_TABS.includes(tab)
+  const showSqlGetStarted = tab === 'db-cloud-sql' || SQL_GET_STARTED_TABS.includes(tab)
   const showSecurity = SECURITY_AUDIT_TABS.includes(tab)
   const showComputeVms = COMPUTE_VM_TABS.includes(tab)
   const showIamProjects = IAM_PROJECT_TABS.includes(tab)
@@ -334,7 +338,7 @@ export default function ConsolePage() {
   }
 
   const openService = (id: ServiceId) => {
-    setTab(id)
+    setTab(id === 'db-cloud-sql' ? 'sql-get-started' : id)
     setError('')
     setNavOpen(false)
   }
@@ -669,19 +673,7 @@ export default function ConsolePage() {
             </div>
           )}
 
-          {tab === 'vpc' && (
-            <div className="cl-gc-stub">
-              <p>Per-tenant network isolation is on the control plane. VPC rules UI comes next.</p>
-            </div>
-          )}
-
-          {tab === 'databases' && (
-            <div className="cl-gc-stub">
-              <p>Managed database catalog. Cloud SQL will be the first engine.</p>
-            </div>
-          )}
-
-          {tab === 'sql' && (
+          {showSqlGetStarted && (
             <div className="cl-gc-stub">
               <p>Managed Postgres/MySQL isn&apos;t provisioned yet. Use Cloud Storage for object data today.</p>
             </div>
