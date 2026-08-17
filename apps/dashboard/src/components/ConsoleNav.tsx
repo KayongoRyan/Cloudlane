@@ -1,27 +1,34 @@
 'use client'
 
-import { ReactNode, useEffect, useMemo, useState } from 'react'
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import {
+  firstSubmenuId,
+  flattenSubmenu,
+  getSubmenuSections,
+  isActiveInMenu,
+  SERVICE_LABELS,
+  type ServiceId,
+} from './consoleNavMenus'
 
-export type ServiceId =
-  | 'hub'
-  | 'overview'
-  | 'solutions'
-  | 'recent'
-  | 'billing'
-  | 'iam'
-  | 'marketplace'
-  | 'apis'
-  | 'agent'
-  | 'compute'
-  | 'kubernetes'
-  | 'storage'
-  | 'security'
-  | 'bigquery'
-  | 'monitoring'
-  | 'run'
-  | 'vpc'
-  | 'databases'
-  | 'sql'
+export type { ServiceId } from './consoleNavMenus'
+export {
+  COMPUTE_VM_TABS,
+  IAM_PROJECT_TABS,
+  isAgentStubTab,
+  isApisStubTab,
+  isBigQueryStubTab,
+  isComputeStubTab,
+  isIamStubTab,
+  isK8sStubTab,
+  isOverviewTab,
+  isProductStubTab,
+  isSecurityStubTab,
+  K8S_DEPLOY_TABS,
+  SECURITY_AUDIT_TABS,
+  SERVICE_LABELS,
+  SUBMENU_SECTIONS,
+} from './consoleNavMenus'
 
 type NavItem = {
   id: ServiceId
@@ -32,7 +39,6 @@ type NavItem = {
 }
 
 const FAV_KEY = 'cl-console-favorites'
-const RECENT_KEY = 'cl-console-recent'
 
 function Icon({ children }: { children: ReactNode }) {
   return (
@@ -49,28 +55,6 @@ const stroke = {
   strokeLinejoin: 'round' as const,
 }
 
-export const SERVICE_LABELS: Record<ServiceId, string> = {
-  hub: 'Cloud Hub',
-  overview: 'Cloud overview',
-  solutions: 'Solutions',
-  recent: 'Recently visited',
-  billing: 'Billing',
-  iam: 'IAM & Admin',
-  marketplace: 'Marketplace',
-  apis: 'APIs & Services',
-  agent: 'Agent Platform',
-  compute: 'Compute Engine',
-  kubernetes: 'Kubernetes Engine',
-  storage: 'Cloud Storage',
-  security: 'Security',
-  bigquery: 'BigQuery',
-  monitoring: 'Monitoring',
-  run: 'Cloud Run',
-  vpc: 'VPC Network',
-  databases: 'Databases',
-  sql: 'Cloud SQL',
-}
-
 const HUB: NavItem[] = [
   {
     id: 'hub',
@@ -84,16 +68,6 @@ const HUB: NavItem[] = [
     ),
   },
   {
-    id: 'overview',
-    label: SERVICE_LABELS.overview,
-    chevron: true,
-    icon: (
-      <Icon>
-        <path d="M5 19V11M10 19V6M15 19v-8M20 19V8" {...stroke} />
-      </Icon>
-    ),
-  },
-  {
     id: 'solutions',
     label: SERVICE_LABELS.solutions,
     chevron: true,
@@ -103,17 +77,6 @@ const HUB: NavItem[] = [
         <rect x="13" y="4" width="7" height="7" rx="1.2" {...stroke} />
         <rect x="4" y="13" width="7" height="7" rx="1.2" {...stroke} />
         <rect x="13" y="13" width="7" height="7" rx="1.2" {...stroke} />
-      </Icon>
-    ),
-  },
-  {
-    id: 'recent',
-    label: SERVICE_LABELS.recent,
-    chevron: true,
-    icon: (
-      <Icon>
-        <circle cx="12" cy="12" r="8" {...stroke} />
-        <path d="M12 8v5l3 2" {...stroke} />
       </Icon>
     ),
   },
@@ -324,36 +287,152 @@ function readList(key: string): ServiceId[] {
   }
 }
 
+function getSubmenu(item: NavItem) {
+  return flattenSubmenu(item.id)
+}
+
+function isActiveItem(active: ServiceId, item: NavItem): boolean {
+  return isActiveInMenu(active, item.id)
+}
+
 function NavRow({
   item,
   active,
   starred,
+  openFlyoutId,
+  onFlyoutToggle,
   onSelect,
   onToggleFavorite,
 }: {
   item: NavItem
-  active: boolean
+  active: ServiceId
   starred?: boolean
-  onSelect: () => void
+  openFlyoutId: ServiceId | null
+  onFlyoutToggle: (id: ServiceId | null) => void
+  onSelect: (id: ServiceId) => void
   onToggleFavorite?: () => void
 }) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const chevronRef = useRef<HTMLButtonElement>(null)
+  const flyoutRef = useRef<HTMLDivElement>(null)
+  const [flyoutPos, setFlyoutPos] = useState({ top: 0, left: 0 })
+  const [mounted, setMounted] = useState(false)
+  const submenuSections = getSubmenuSections(item.id)
+  const submenu = getSubmenu(item)
+  const hasFlyout = item.chevron && submenu.length > 0
+  const rowActive = isActiveItem(active, item)
+  const flyoutOpen = openFlyoutId === item.id
+
+  useEffect(() => setMounted(true), [])
+
+  const updateFlyoutPos = () => {
+    if (!chevronRef.current) return
+    const rect = chevronRef.current.getBoundingClientRect()
+    setFlyoutPos({ top: rect.top, left: rect.right + 6 })
+  }
+
+  useEffect(() => {
+    if (!flyoutOpen) return
+    updateFlyoutPos()
+    window.addEventListener('resize', updateFlyoutPos)
+    window.addEventListener('scroll', updateFlyoutPos, true)
+    return () => {
+      window.removeEventListener('resize', updateFlyoutPos)
+      window.removeEventListener('scroll', updateFlyoutPos, true)
+    }
+  }, [flyoutOpen])
+
+  useEffect(() => {
+    if (!flyoutOpen) return
+    const onPointerDown = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (wrapRef.current?.contains(target)) return
+      if (flyoutRef.current?.contains(target)) return
+      onFlyoutToggle(null)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [flyoutOpen, onFlyoutToggle])
+
+  const toggleFlyout = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (flyoutOpen) {
+      onFlyoutToggle(null)
+      return
+    }
+    updateFlyoutPos()
+    onFlyoutToggle(item.id)
+  }
+
+  const pickSubmenu = (id: ServiceId) => {
+    onFlyoutToggle(null)
+    onSelect(id)
+  }
+
+  const flyout = flyoutOpen && mounted && hasFlyout ? createPortal(
+    <div
+      ref={flyoutRef}
+      className={`cl-gc-flyout cl-gc-flyout-fixed${submenuSections.some((s) => s.title) ? ' is-grouped' : ''}`}
+      role="menu"
+      style={{ top: flyoutPos.top, left: flyoutPos.left }}
+    >
+      <p className="cl-gc-flyout-title">{item.label}</p>
+      {submenuSections.map((section, index) => (
+        <div key={section.title ?? index} className="cl-gc-flyout-section-block">
+          {section.title && <p className="cl-gc-flyout-section">{section.title}</p>}
+          {section.items.map((sub) => (
+            <button
+              key={sub.id}
+              type="button"
+              role="menuitem"
+              className={`cl-gc-flyout-item${active === sub.id ? ' is-active' : ''}`}
+              onClick={() => pickSubmenu(sub.id)}
+            >
+              {sub.label}
+            </button>
+          ))}
+        </div>
+      ))}
+    </div>,
+    document.body,
+  ) : null
+
   return (
-    <div className={`cl-gc-row${active ? ' is-active' : ''}`}>
-      <button type="button" className="cl-gc-row-main" onClick={onSelect}>
-        <span className="cl-gc-row-icon">{item.icon}</span>
-        <span className="cl-gc-row-label">{item.label}</span>
-        {item.chevron && <span className="cl-gc-chevron" aria-hidden="true">›</span>}
-      </button>
-      {item.favoriteable && onToggleFavorite && (
-        <button
-          type="button"
-          className={`cl-gc-star${starred ? ' is-on' : ''}`}
-          aria-label={starred ? `Unfavorite ${item.label}` : `Favorite ${item.label}`}
-          onClick={onToggleFavorite}
-        >
-          {starred ? '★' : '☆'}
+    <div ref={wrapRef} className={`cl-gc-row-wrap${flyoutOpen ? ' is-flyout-open' : ''}`}>
+      <div className={`cl-gc-row${rowActive ? ' is-active' : ''}`}>
+        <button type="button" className="cl-gc-row-main" onClick={() => onSelect(firstSubmenuId(item.id) ?? item.id)}>
+          <span className="cl-gc-row-icon">{item.icon}</span>
+          <span className="cl-gc-row-label">{item.label}</span>
         </button>
-      )}
+        {hasFlyout && (
+          <button
+            ref={chevronRef}
+            type="button"
+            className={`cl-gc-chevron-btn${flyoutOpen ? ' is-open' : ''}`}
+            aria-label={`${item.label} menu`}
+            aria-expanded={flyoutOpen}
+            aria-haspopup="menu"
+            onClick={toggleFlyout}
+          >
+            <span className="cl-gc-chevron" aria-hidden="true">›</span>
+          </button>
+        )}
+        {item.favoriteable && onToggleFavorite && (
+          <button
+            type="button"
+            className={`cl-gc-star${starred ? ' is-on' : ''}`}
+            aria-label={starred ? `Unfavorite ${item.label}` : `Favorite ${item.label}`}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleFavorite()
+            }}
+          >
+            {starred ? '★' : '☆'}
+          </button>
+        )}
+      </div>
+      {flyout}
     </div>
   )
 }
@@ -371,6 +450,7 @@ export default function ConsoleNav({
 }) {
   const [favorites, setFavorites] = useState<ServiceId[]>([])
   const [showAll, setShowAll] = useState(true)
+  const [openFlyoutId, setOpenFlyoutId] = useState<ServiceId | null>(null)
 
   useEffect(() => {
     setFavorites(readList(FAV_KEY))
@@ -382,14 +462,9 @@ export default function ConsoleNav({
   )
 
   const select = (id: ServiceId) => {
+    setOpenFlyoutId(null)
     onSelect(id)
     onClose()
-    if (id === 'hub' || id === 'overview' || id === 'solutions' || id === 'recent') return
-    const prev = readList(RECENT_KEY)
-    localStorage.setItem(
-      RECENT_KEY,
-      JSON.stringify([id, ...prev.filter((x) => x !== id)].slice(0, 8)),
-    )
   }
 
   const toggleFavorite = (id: ServiceId) => {
@@ -411,8 +486,10 @@ export default function ConsoleNav({
             <NavRow
               key={item.id}
               item={item}
-              active={active === item.id}
-              onSelect={() => select(item.id)}
+              active={active}
+              openFlyoutId={openFlyoutId}
+              onFlyoutToggle={setOpenFlyoutId}
+              onSelect={select}
             />
           ))}
         </div>
@@ -426,9 +503,11 @@ export default function ConsoleNav({
               <NavRow
                 key={`fav-${item.id}`}
                 item={item}
-                active={active === item.id}
+                active={active}
                 starred
-                onSelect={() => select(item.id)}
+                openFlyoutId={openFlyoutId}
+                onFlyoutToggle={setOpenFlyoutId}
+                onSelect={select}
                 onToggleFavorite={() => toggleFavorite(item.id)}
               />
             ))
@@ -441,9 +520,11 @@ export default function ConsoleNav({
             <NavRow
               key={item.id}
               item={item}
-              active={active === item.id}
+              active={active}
               starred={favorites.includes(item.id)}
-              onSelect={() => select(item.id)}
+              openFlyoutId={openFlyoutId}
+              onFlyoutToggle={setOpenFlyoutId}
+              onSelect={select}
               onToggleFavorite={() => toggleFavorite(item.id)}
             />
           ))}
@@ -481,9 +562,4 @@ export default function ConsoleNav({
       </div>
     </aside>
   )
-}
-
-export function getRecentServices(): ServiceId[] {
-  if (typeof window === 'undefined') return []
-  return readList(RECENT_KEY)
 }

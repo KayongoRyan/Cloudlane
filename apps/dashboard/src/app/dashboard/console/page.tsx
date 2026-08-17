@@ -5,9 +5,14 @@ import { useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import Logo from '../../../components/Logo'
 import ConsoleNav, {
+  COMPUTE_VM_TABS,
+  IAM_PROJECT_TABS,
+  isOverviewTab,
+  isProductStubTab,
+  K8S_DEPLOY_TABS,
+  SECURITY_AUDIT_TABS,
   PRODUCT_IDS,
   SERVICE_LABELS,
-  getRecentServices,
   type ServiceId,
 } from '../../../components/ConsoleNav'
 import { getApiBase } from '../../../lib/api'
@@ -108,9 +113,8 @@ async function apiSend<T = unknown>(path: string, method: string, body?: unknown
 
 export default function ConsolePage() {
   const router = useRouter()
-  const [tab, setTab] = useState<ServiceId>('overview')
+  const [tab, setTab] = useState<ServiceId>('hub-home')
   const [navOpen, setNavOpen] = useState(false)
-  const [recent, setRecent] = useState<ServiceId[]>([])
   const [projectId, setProjectId] = useState<string>('')
   const [error, setError] = useState('')
   const [newKey, setNewKey] = useState<string | null>(null)
@@ -153,12 +157,21 @@ export default function ConsolePage() {
     return () => document.body.classList.remove('nav-lock')
   }, [navOpen])
 
-  useEffect(() => {
-    if (tab === 'recent') setRecent(getRecentServices())
-  }, [tab])
+  const showDeployments =
+    tab === 'run' ||
+    K8S_DEPLOY_TABS.includes(tab) ||
+    tab === 'hub-deployments' ||
+    tab === 'solutions-deployments'
+
+  const showHubHome = tab === 'hub' || tab === 'hub-home'
+  const showMonitoring = tab === 'monitoring' || tab === 'hub-health'
+  const showSecurity = SECURITY_AUDIT_TABS.includes(tab)
+  const showComputeVms = COMPUTE_VM_TABS.includes(tab)
+  const showIamProjects = IAM_PROJECT_TABS.includes(tab)
+  const showApiKeys = tab === 'apis-credentials' || tab === 'agent'
 
   const { data: keysData, mutate: mutateKeys } = useSWR(
-    tab === 'apis' || tab === 'agent' ? 'console-keys' : null,
+    showApiKeys ? 'console-keys' : null,
     () => fetcher<{ apiKeys: ApiKeyRow[] }>('/api/api-keys'),
   )
   const { data: bucketsData, mutate: mutateBuckets } = useSWR(
@@ -166,7 +179,7 @@ export default function ConsolePage() {
     () => fetcher<{ buckets: Bucket[] }>(`/api/buckets${projectQuery}`),
   )
   const { data: billingUsage, mutate: mutateBilling } = useSWR(
-    tab === 'billing' || tab === 'overview' || tab === 'hub' ? 'console-usage' : null,
+    tab === 'billing' || showHubHome ? 'console-usage' : null,
     () => fetcher<{ usage: { computeSeconds: number; estimatedCost: number; currency: string } }>('/api/billing/usage'),
   )
   const { data: invoicesData, mutate: mutateInvoices } = useSWR(
@@ -174,15 +187,15 @@ export default function ConsolePage() {
     () => fetcher<{ invoices: Invoice[] }>('/api/billing/invoices'),
   )
   const { data: monitoring, mutate: mutateMonitoring } = useSWR(
-    tab === 'monitoring' || tab === 'overview' || tab === 'hub' ? 'console-monitoring' : null,
+    showHubHome || showMonitoring ? 'console-monitoring' : null,
     () => fetcher<MonitoringSummary>('/api/monitoring/summary'),
   )
   const { data: vmsData, mutate: mutateVms } = useSWR(
-    tab === 'compute' || tab === 'overview' ? ['console-vms', projectId] : null,
+    showHubHome || showComputeVms ? ['console-vms', projectId] : null,
     () => fetcher<{ vms: Vm[] }>(`/api/vms${projectQuery}`),
   )
   const { data: auditData } = useSWR(
-    tab === 'security' ? 'console-audit' : null,
+    showSecurity ? 'console-audit' : null,
     () => fetcher<{ auditLogs: AuditLog[] }>('/api/audit-logs'),
   )
 
@@ -374,7 +387,7 @@ export default function ConsolePage() {
             <div>
               <p className="gcp-kicker">Console</p>
               <h2>{SERVICE_LABELS[tab]}</h2>
-              {activeProject && tab !== 'iam' && tab !== 'apis' && tab !== 'agent' && (
+              {activeProject && !showIamProjects && !showApiKeys && tab !== 'agent-overview' && (
                 <p className="cl-console-sub">{activeProject.name}</p>
               )}
             </div>
@@ -382,7 +395,7 @@ export default function ConsolePage() {
 
           {error && <div className="gcp-form-error">{error}</div>}
 
-          {(tab === 'run' || tab === 'kubernetes') && (
+          {(showDeployments) && (
             <>
               <form className="cl-console-inline-form" onSubmit={handleDeploy}>
                 <input required placeholder="Service name" value={deployForm.name} onChange={(e) => setDeployForm({ ...deployForm, name: e.target.value })} />
@@ -414,7 +427,7 @@ export default function ConsolePage() {
             </>
           )}
 
-          {tab === 'iam' && (
+          {showIamProjects && (
             <>
               <form className="cl-console-inline-form" onSubmit={handleCreateProject}>
                 <input required placeholder="Project name" value={projectName} onChange={(e) => setProjectName(e.target.value)} />
@@ -434,7 +447,7 @@ export default function ConsolePage() {
             </>
           )}
 
-          {(tab === 'apis' || tab === 'agent') && (
+          {showApiKeys && (
             <>
               <div className="cl-console-actions">
                 <button type="button" className="gcp-btn-primary gcp-btn-compact" onClick={handleCreateKey} disabled={busy}>
@@ -461,6 +474,18 @@ export default function ConsolePage() {
                 ))}
               </div>
             </>
+          )}
+
+          {isOverviewTab(tab) && (
+            <div className="cl-gc-stub">
+              <p>{SERVICE_LABELS[tab]} — pick a section from the chevron menu to get started.</p>
+            </div>
+          )}
+
+          {isProductStubTab(tab) && (
+            <div className="cl-gc-stub">
+              <p>{SERVICE_LABELS[tab]} is coming soon on Cloudlane.</p>
+            </div>
           )}
 
           {tab === 'storage' && (
@@ -513,7 +538,7 @@ export default function ConsolePage() {
             </>
           )}
 
-          {tab === 'monitoring' && monitoring && (
+          {showMonitoring && monitoring && (
             <>
               <div className="cl-billing-cards">
                 <article>
@@ -540,7 +565,7 @@ export default function ConsolePage() {
             </>
           )}
 
-          {tab === 'compute' && (
+          {showComputeVms && (
             <>
               <form className="cl-console-inline-form" onSubmit={handleCreateVm}>
                 <input required placeholder="VM name" value={vmForm.name} onChange={(e) => setVmForm({ ...vmForm, name: e.target.value })} />
@@ -570,18 +595,18 @@ export default function ConsolePage() {
             </>
           )}
 
-          {tab === 'overview' && (
+          {showHubHome && (
             <div className="cl-gc-overview">
               <div className="cl-billing-cards">
                 <article>
-                  <p className="gcp-kicker">Cloud Run</p>
-                  <p className="cl-billing-stat">{monitoring?.deployments.running ?? deployments.filter((d) => d.status === 'running').length}/{monitoring?.deployments.total ?? deployments.length}</p>
-                  <button type="button" className="cl-text-link" onClick={() => openService('run')}>Open</button>
+                  <p className="gcp-kicker">Running</p>
+                  <p className="cl-billing-stat">{monitoring?.deployments.running ?? deployments.filter((d) => d.status === 'running').length}</p>
+                  <button type="button" className="cl-text-link" onClick={() => openService('hub-deployments')}>Deployments</button>
                 </article>
                 <article>
-                  <p className="gcp-kicker">Compute Engine</p>
-                  <p className="cl-billing-stat">{vmsData?.vms.length ?? 0}</p>
-                  <button type="button" className="cl-text-link" onClick={() => openService('compute')}>Open</button>
+                  <p className="gcp-kicker">Total services</p>
+                  <p className="cl-billing-stat">{monitoring?.deployments.total ?? deployments.length}</p>
+                  <button type="button" className="cl-text-link" onClick={() => openService('hub-health')}>Health</button>
                 </article>
                 <article>
                   <p className="gcp-kicker">Estimated</p>
@@ -592,7 +617,7 @@ export default function ConsolePage() {
             </div>
           )}
 
-          {tab === 'hub' && (
+          {tab === 'solutions-all' && (
             <div className="cl-gc-hub">
               {PRODUCT_IDS.map((id) => (
                 <button type="button" key={id} className="cl-gc-hub-card" onClick={() => openService(id)}>
@@ -602,24 +627,7 @@ export default function ConsolePage() {
             </div>
           )}
 
-          {tab === 'recent' && (
-            <div className="gcp-table">
-              <div className="gcp-table-row gcp-table-head cl-table-2">
-                <span>Service</span><span></span>
-              </div>
-              {recent.length === 0 && (
-                <div className="gcp-table-row cl-console-empty">Nothing visited yet — pick a product from the sidebar.</div>
-              )}
-              {recent.map((id) => (
-                <button type="button" key={id} className="gcp-table-row cl-table-2 cl-gc-recent-row" onClick={() => openService(id)}>
-                  <span className="gcp-service">{SERVICE_LABELS[id]}</span>
-                  <span className="gcp-muted">Open</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {tab === 'security' && (
+          {showSecurity && (
             <div className="gcp-table">
               <div className="gcp-table-row gcp-table-head cl-table-3">
                 <span>Action</span><span>Resource</span><span>When</span>
@@ -639,19 +647,25 @@ export default function ConsolePage() {
 
           {tab === 'solutions' && (
             <div className="cl-gc-stub">
-              <p>Blueprints for API backends, staging previews, and scale-to-zero workers. Pick a product from the sidebar to start.</p>
+              <p>Blueprints for API backends, staging previews, and scale-to-zero workers. Click the arrow on Solutions to browse all products, deployments, and the App Design Center.</p>
+            </div>
+          )}
+
+          {tab === 'solutions-app-design' && (
+            <div className="cl-gc-stub">
+              <p>Compose services, routes, and env vars visually before you deploy. Coming soon.</p>
+            </div>
+          )}
+
+          {(tab === 'hub-optimization' || tab === 'hub-quotas' || tab === 'hub-maintenance' || tab === 'hub-support') && (
+            <div className="cl-gc-stub">
+              <p>{SERVICE_LABELS[tab]} is on the roadmap. Deploy and monitor services from the Cloud Hub menu today.</p>
             </div>
           )}
 
           {tab === 'marketplace' && (
             <div className="cl-gc-stub">
               <p>Third-party images and add-ons will land here. Deploy from Cloud Run in the meantime.</p>
-            </div>
-          )}
-
-          {tab === 'bigquery' && (
-            <div className="cl-gc-stub">
-              <p>Warehouse queries aren&apos;t wired yet. Usage metrics live under Monitoring.</p>
             </div>
           )}
 
