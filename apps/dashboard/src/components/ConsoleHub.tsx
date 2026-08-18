@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import {
   CONSOLE_QUICK_CATEGORIES,
   CONSOLE_SERVICE_CATEGORIES,
+  type CatalogService,
 } from './consoleServiceCategories'
 import {
   pushRecentService,
@@ -45,6 +46,10 @@ export default function ConsoleHub({ failedDeployments = 0, apiHealthy, onOpenSe
     pushRecentService(id)
     setRecent(recentServiceLabels(readRecentServices()))
     onOpenService(id)
+  }
+
+  const openCatalog = (service: CatalogService) => {
+    if (service.consoleId) open(service.consoleId)
   }
 
   const openIssues = failedDeployments + (apiHealthy === false ? 1 : 0)
@@ -125,7 +130,12 @@ export default function ConsoleHub({ failedDeployments = 0, apiHealthy, onOpenSe
         <h2 className="cl-hub-categories-title">Services</h2>
         <div className="cl-hub-category-grid">
           {CONSOLE_SERVICE_CATEGORIES.map((category) => (
-            <CategoryCard key={category.title} title={category.title} />
+            <CategoryCard
+              key={category.title}
+              title={category.title}
+              services={category.services}
+              onOpen={openCatalog}
+            />
           ))}
         </div>
       </section>
@@ -133,14 +143,43 @@ export default function ConsoleHub({ failedDeployments = 0, apiHealthy, onOpenSe
   )
 }
 
-function CategoryCard({ title }: { title: string }) {
+function CategoryCard({
+  title,
+  services,
+  onOpen,
+}: {
+  title: string
+  services: CatalogService[]
+  onOpen: (service: CatalogService) => void
+}) {
   return (
-    <article className="cl-hub-category-card cl-hub-category-card--title">
+    <article className="cl-hub-category-card">
       <header className="cl-hub-widget-head">
         <WidgetDrag />
         <h3>{title}</h3>
         <WidgetMenu />
       </header>
+      {services.length === 0 ? (
+        <p className="cl-hub-category-empty">No services in this category yet</p>
+      ) : (
+        <ul className="cl-hub-catalog-list">
+          {services.map((service) => (
+            <li key={service.name}>
+              {service.consoleId ? (
+                <button type="button" className="cl-hub-catalog-item" onClick={() => onOpen(service)}>
+                  <strong>{service.name}</strong>
+                  <span>{service.description}</span>
+                </button>
+              ) : (
+                <div className="cl-hub-catalog-item cl-hub-catalog-item--static">
+                  <strong>{service.name}</strong>
+                  <span>{service.description}</span>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
     </article>
   )
 }
