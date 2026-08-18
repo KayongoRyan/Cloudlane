@@ -99,7 +99,30 @@ export const CONSOLE_SERVICE_CATEGORIES: ServiceCategory[] = [
       },
     ],
   },
-  { title: 'Cloud Financial Management', services: [] },
+  {
+    title: 'Cloud Financial Management',
+    services: [
+      {
+        name: 'Billing and Cost Management',
+        description: 'View and pay bills, analyze and govern your spending, and optimize your costs',
+        consoleId: 'billing',
+      },
+      {
+        name: 'Cloudlane Billing Conductor',
+        description: 'Simplifying your billing practice',
+      },
+      {
+        name: 'Cloudlane FinOps Agent',
+        description: 'A frontier agent that makes it easy to continuously monitor costs, investigate anomalies, and surface optimization opportunities across your cloud environment',
+        consoleId: 'agent',
+      },
+      {
+        name: 'Cloudlane Marketplace',
+        description: 'Digital catalog where you can find, buy, and deploy software',
+        consoleId: 'marketplace',
+      },
+    ],
+  },
   {
     title: 'Compute',
     services: [
