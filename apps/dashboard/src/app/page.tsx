@@ -38,7 +38,7 @@ export default function Home() {
 
       localStorage.setItem('token', data.token)
       if (data.apiKey) localStorage.setItem('apiKey', data.apiKey)
-      router.push('/dashboard')
+      router.push('/home')
     } catch (err: any) {
       if (err instanceof TypeError && err.message === 'Failed to fetch') {
         setError(`Cannot reach the API at ${apiBase}. ${apiReachabilityHint(apiBase)}`)

@@ -140,9 +140,6 @@ export default function Dashboard() {
         </nav>
 
         <div className="hero-sky-actions">
-          <button type="button" className="hero-sky-console" onClick={() => { setNavOpen(false); router.push('/dashboard/console') }}>
-            Console
-          </button>
           <button type="button" className="gcp-avatar" onClick={handleLogout} title="Sign out">
             CL
           </button>
@@ -215,8 +212,8 @@ export default function Dashboard() {
           </div>
 
           <div className="hero-sky-ctas">
-            <button type="button" className="gcp-btn-primary" onClick={() => setShowDeployForm(true)}>
-              Deploy now
+            <button type="button" className="gcp-btn-primary" onClick={() => router.push('/home')}>
+              Dashboard
             </button>
             <button type="button" className="hero-sky-ghost" onClick={() => router.push('/dashboard/console')}>
               Open console
@@ -365,7 +362,7 @@ export default function Dashboard() {
             <div className="cl-footer-col">
               <h3>Developers</h3>
               <ul>
-                <li><button type="button" onClick={() => setShowDeployForm(true)}>Open console</button></li>
+                <li><button type="button" onClick={() => router.push('/dashboard/console')}>Open console</button></li>
                 <li><a href="#products">CLI reference</a></li>
                 <li><a href="https://comfy-starlight-51c0e7.netlify.app/" target="_blank" rel="noreferrer">Control plane API</a></li>
                 <li><a href="https://github.com/KayongoRyan/Cloudlane" target="_blank" rel="noreferrer">Code samples</a></li>

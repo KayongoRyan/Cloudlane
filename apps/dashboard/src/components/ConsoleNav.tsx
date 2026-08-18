@@ -453,11 +453,16 @@ export default function ConsoleNav({
 }) {
   const [favorites, setFavorites] = useState<ServiceId[]>([])
   const [showAll, setShowAll] = useState(true)
+  const [productFilter, setProductFilter] = useState('')
   const [openFlyoutId, setOpenFlyoutId] = useState<ServiceId | null>(null)
 
   useEffect(() => {
     setFavorites(readList(FAV_KEY))
   }, [])
+
+  useEffect(() => {
+    if (!open) setProductFilter('')
+  }, [open])
 
   const productById = useMemo(
     () => Object.fromEntries(PRODUCTS.map((p) => [p.id, p])) as Record<string, NavItem>,
@@ -479,6 +484,11 @@ export default function ConsoleNav({
   }
 
   const visibleProducts = showAll ? PRODUCTS : PRODUCTS.filter((p) => ['billing', 'iam', 'marketplace'].includes(p.id))
+  const filteredProducts = useMemo(() => {
+    const q = productFilter.trim().toLowerCase()
+    if (!q) return visibleProducts
+    return visibleProducts.filter((p) => p.label.toLowerCase().includes(q))
+  }, [visibleProducts, productFilter])
   const favoriteItems = favorites.map((id) => productById[id]).filter(Boolean)
 
   return (
@@ -497,12 +507,10 @@ export default function ConsoleNav({
           ))}
         </div>
 
-        <div className="cl-gc-nav-block">
-          <p className="cl-gc-nav-heading">Favorite products</p>
-          {favoriteItems.length === 0 ? (
-            <p className="cl-gc-nav-empty">Favorite products appear here</p>
-          ) : (
-            favoriteItems.map((item) => (
+        {favoriteItems.length > 0 && (
+          <div className="cl-gc-nav-block">
+            <p className="cl-gc-nav-heading">Favorite products</p>
+            {favoriteItems.map((item) => (
               <NavRow
                 key={`fav-${item.id}`}
                 item={item}
@@ -513,24 +521,38 @@ export default function ConsoleNav({
                 onSelect={select}
                 onToggleFavorite={() => toggleFavorite(item.id)}
               />
-            ))
-          )}
-        </div>
+            ))}
+          </div>
+        )}
 
         <div className="cl-gc-nav-block" id="cl-gc-products">
-          <p className="cl-gc-nav-heading">Products</p>
-          {visibleProducts.map((item) => (
-            <NavRow
-              key={item.id}
-              item={item}
-              active={active}
-              starred={favorites.includes(item.id)}
-              openFlyoutId={openFlyoutId}
-              onFlyoutToggle={setOpenFlyoutId}
-              onSelect={select}
-              onToggleFavorite={() => toggleFavorite(item.id)}
+          <p className="cl-gc-nav-heading">Products · {visibleProducts.length}</p>
+          <label className="cl-gc-nav-search">
+            <span className="sr-only">Filter products</span>
+            <input
+              type="search"
+              value={productFilter}
+              onChange={(e) => setProductFilter(e.target.value)}
+              placeholder="Filter products…"
+              aria-label="Filter products"
             />
-          ))}
+          </label>
+          {filteredProducts.length === 0 ? (
+            <p className="cl-gc-nav-empty">No products match &ldquo;{productFilter}&rdquo;</p>
+          ) : (
+            filteredProducts.map((item) => (
+              <NavRow
+                key={item.id}
+                item={item}
+                active={active}
+                starred={favorites.includes(item.id)}
+                openFlyoutId={openFlyoutId}
+                onFlyoutToggle={setOpenFlyoutId}
+                onSelect={select}
+                onToggleFavorite={() => toggleFavorite(item.id)}
+              />
+            ))
+          )}
         </div>
       </div>
 
