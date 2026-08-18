@@ -4,8 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import useSWR from 'swr'
 import ConsoleNav, { type ServiceId } from '../../components/ConsoleNav'
+import { ConsoleTopBar } from '../../components/ConsoleTopBar'
 import HomeDashboard from '../../components/HomeDashboard'
-import Logo from '../../components/Logo'
 import { getApiBase } from '../../lib/api'
 import { useConsoleShell } from '../../lib/useConsoleShell'
 
@@ -76,46 +76,24 @@ export default function HomePage() {
         <button type="button" className="cl-gc-scrim" aria-label="Close navigation" onClick={() => setNavOpen(false)} />
       )}
 
-      <header ref={topbarRef} className="cl-console-top">
-        <button
-          type="button"
-          className={`cl-gc-menu${navOpen ? ' is-open' : ''}`}
-          aria-label={navOpen ? 'Close menu' : 'Open menu'}
-          aria-expanded={navOpen}
-          onClick={() => setNavOpen((v) => !v)}
-        >
-          <span /><span /><span />
-        </button>
-        <a href="/dashboard" className="hero-sky-brand">
-          <Logo size="sm" />
-        </a>
-        <div className="cl-console-project">
-          <span>Project</span>
-          <select
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-            aria-label="Active project"
+      <ConsoleTopBar
+        ref={topbarRef}
+        showMenu
+        navOpen={navOpen}
+        onMenuToggle={() => setNavOpen((v) => !v)}
+        projectId={projectId}
+        projects={projects}
+        onProjectChange={setProjectId}
+        actions={(
+          <button
+            type="button"
+            className="gcp-btn-secondary gcp-btn-compact"
+            onClick={() => router.push('/dashboard')}
           >
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        </div>
-        <button
-          type="button"
-          className="gcp-btn-secondary gcp-btn-compact"
-          onClick={() => router.push('/dashboard')}
-        >
-          Overview
-        </button>
-        <button
-          type="button"
-          className="gcp-btn-secondary gcp-btn-compact"
-          onClick={() => { localStorage.removeItem('token'); router.push('/') }}
-        >
-          Sign out
-        </button>
-      </header>
+            Overview
+          </button>
+        )}
+      />
 
       <ConsoleNav active="hub-home" onSelect={openService} open={navOpen} onClose={() => setNavOpen(false)} />
 

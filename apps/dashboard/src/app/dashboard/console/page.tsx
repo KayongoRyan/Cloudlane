@@ -3,10 +3,10 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import useSWR from 'swr'
-import Logo from '../../../components/Logo'
-import ConsoleHome from '../../../components/ConsoleHome'
+import { ConsoleTopBar } from '../../../components/ConsoleTopBar'
+import ConsoleHub from '../../../components/ConsoleHub'
+import { pushRecentService } from '../../../components/recentServices'
 import { useConsoleShell } from '../../../lib/useConsoleShell'
-import { recordRecentlyVisited } from '../../../lib/recentlyVisited'
 import ConsoleNav, {
   COMPUTE_VM_TABS,
   IAM_PROJECT_TABS,
@@ -117,15 +117,16 @@ async function apiSend<T = unknown>(path: string, method: string, body?: unknown
   return res.json() as Promise<T>
 }
 
-type ConsoleView = ServiceId | 'console-home'
-
 export default function ConsolePage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const topbarRef = useRef<HTMLElement>(null)
   const mainRef = useRef<HTMLDivElement>(null)
-  const [tab, setTab] = useState<ConsoleView>('console-home')
+  const tabParam = searchParams.get('tab') as ServiceId | null
+  const isHubView = !tabParam
+  const [tab, setTab] = useState<ServiceId>(tabParam ?? 'run-services')
   const [navOpen, setNavOpen] = useState(false)
+  const [apiHealthy, setApiHealthy] = useState<boolean | null>(null)
   const [projectId, setProjectId] = useState<string>('')
   const [error, setError] = useState('')
   const [newKey, setNewKey] = useState<string | null>(null)
@@ -152,16 +153,17 @@ export default function ConsolePage() {
   )
   const projects = projectsData?.projects ?? []
 
-  useConsoleShell(navOpen, topbarRef)
+  useConsoleShell(isHubView ? false : navOpen, topbarRef)
 
   useEffect(() => {
-    const fromQuery = searchParams.get('tab')
-    if (fromQuery) setTab(fromQuery as ServiceId)
-    else setTab('console-home')
-  }, [searchParams])
+    fetch(`${getApiBase()}/health`)
+      .then((r) => setApiHealthy(r.ok))
+      .catch(() => setApiHealthy(false))
+  }, [])
 
-  const isConsoleHome = tab === 'console-home'
-  const serviceTab = isConsoleHome ? null : tab
+  useEffect(() => {
+    if (tabParam) setTab(tabParam)
+  }, [tabParam])
 
   useEffect(() => {
     if (!projectId && projects.length) {
@@ -176,38 +178,36 @@ export default function ConsolePage() {
   )
 
   const showDeployments =
-    serviceTab !== null && (
-      RUN_DEPLOY_TABS.includes(serviceTab) ||
-      K8S_DEPLOY_TABS.includes(serviceTab) ||
-      serviceTab === 'hub-deployments' ||
-      serviceTab === 'solutions-deployments'
-    )
+    RUN_DEPLOY_TABS.includes(tab) ||
+    K8S_DEPLOY_TABS.includes(tab) ||
+    tab === 'hub-deployments' ||
+    tab === 'solutions-deployments'
 
-  const showMonitoring = serviceTab !== null && MONITORING_LIVE_TABS.includes(serviceTab)
-  const showSqlGetStarted = serviceTab !== null && (serviceTab === 'db-cloud-sql' || SQL_GET_STARTED_TABS.includes(serviceTab))
-  const showSecurity = serviceTab !== null && SECURITY_AUDIT_TABS.includes(serviceTab)
-  const showComputeVms = serviceTab !== null && COMPUTE_VM_TABS.includes(serviceTab)
-  const showIamProjects = serviceTab !== null && IAM_PROJECT_TABS.includes(serviceTab)
-  const showApiKeys = serviceTab !== null && (serviceTab === 'apis-credentials' || serviceTab === 'agent')
+  const showMonitoring = MONITORING_LIVE_TABS.includes(tab)
+  const showSqlGetStarted = tab === 'db-cloud-sql' || SQL_GET_STARTED_TABS.includes(tab)
+  const showSecurity = SECURITY_AUDIT_TABS.includes(tab)
+  const showComputeVms = COMPUTE_VM_TABS.includes(tab)
+  const showIamProjects = IAM_PROJECT_TABS.includes(tab)
+  const showApiKeys = tab === 'apis-credentials' || tab === 'agent'
 
   const { data: keysData, mutate: mutateKeys } = useSWR(
     showApiKeys ? 'console-keys' : null,
     () => fetcher<{ apiKeys: ApiKeyRow[] }>('/api/api-keys'),
   )
   const { data: bucketsData, mutate: mutateBuckets } = useSWR(
-    serviceTab === 'storage' ? ['console-buckets', projectId] : null,
+    tab === 'storage' ? ['console-buckets', projectId] : null,
     () => fetcher<{ buckets: Bucket[] }>(`/api/buckets${projectQuery}`),
   )
   const { data: billingUsage, mutate: mutateBilling } = useSWR(
-    serviceTab === 'billing' ? 'console-usage' : null,
+    tab === 'billing' ? 'console-usage' : null,
     () => fetcher<{ usage: { computeSeconds: number; estimatedCost: number; currency: string } }>('/api/billing/usage'),
   )
   const { data: invoicesData, mutate: mutateInvoices } = useSWR(
-    serviceTab === 'billing' ? 'console-invoices' : null,
+    tab === 'billing' ? 'console-invoices' : null,
     () => fetcher<{ invoices: Invoice[] }>('/api/billing/invoices'),
   )
   const { data: monitoring, mutate: mutateMonitoring } = useSWR(
-    showMonitoring || isConsoleHome ? 'console-monitoring' : null,
+    isHubView || showMonitoring ? 'console-monitoring' : null,
     () => fetcher<MonitoringSummary>('/api/monitoring/summary'),
   )
   const { data: vmsData, mutate: mutateVms } = useSWR(
@@ -353,86 +353,88 @@ export default function ConsolePage() {
     }
   }
 
+  const openFromHub = (id: ServiceId) => {
+    pushRecentService(id)
+    const target = id === 'db-cloud-sql' ? 'sql-get-started' : id
+    router.push(`/dashboard/console?tab=${target}`)
+  }
+
   const openService = (id: ServiceId) => {
     if (id === 'hub-home' || id === 'hub') {
-      router.push('/home')
+      router.push('/dashboard/console')
       return
     }
-    recordRecentlyVisited(id)
-    const next = id === 'db-cloud-sql' ? 'sql-get-started' : id
-    setTab(next)
+    pushRecentService(id)
+    setTab(id === 'db-cloud-sql' ? 'sql-get-started' : id)
     setError('')
     setNavOpen(false)
-    router.replace(`/dashboard/console?tab=${next}`, { scroll: false })
+    router.push(`/dashboard/console?tab=${id === 'db-cloud-sql' ? 'sql-get-started' : id}`)
+  }
+
+  const topBar = (
+    <ConsoleTopBar
+      ref={topbarRef}
+      showMenu={!isHubView}
+      navOpen={navOpen}
+      onMenuToggle={() => setNavOpen((v) => !v)}
+      projectId={projectId}
+      projects={projects}
+      onProjectChange={setProjectId}
+      actions={!isHubView ? (
+        <button
+          type="button"
+          className="gcp-btn-secondary gcp-btn-compact"
+          onClick={() => router.push('/dashboard/console')}
+        >
+          Console home
+        </button>
+      ) : undefined}
+    />
+  )
+
+  if (isHubView) {
+    return (
+      <div className="gcp-shell cl-console-shell cl-gc-app cl-gc-app--hub">
+        {topBar}
+        <div ref={mainRef} className="cl-gc-main">
+          <section className="gcp-console cl-hub-shell">
+            <ConsoleHub
+              failedDeployments={monitoring?.deployments.failed ?? deployments.filter((d) => d.status === 'failed').length}
+              apiHealthy={apiHealthy}
+              onOpenService={openFromHub}
+            />
+          </section>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className={`gcp-shell cl-console-shell cl-gc-app${navOpen ? ' is-nav-open' : ''}`}>
-      {navOpen && (
+      {!isHubView && navOpen && (
         <button type="button" className="cl-gc-scrim" aria-label="Close navigation" onClick={() => setNavOpen(false)} />
       )}
 
-      <header ref={topbarRef} className="cl-console-top">
-        <button
-          type="button"
-          className={`cl-gc-menu${navOpen ? ' is-open' : ''}`}
-          aria-label={navOpen ? 'Close menu' : 'Open menu'}
-          aria-expanded={navOpen}
-          onClick={() => setNavOpen((v) => !v)}
-        >
-          <span /><span /><span />
-        </button>
-        <a href="/dashboard" className="hero-sky-brand">
-          <Logo size="sm" />
-        </a>
-        <div className="cl-console-project">
-          <span>Project</span>
-          <select
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-            aria-label="Active project"
-          >
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        </div>
-        <button
-          type="button"
-          className="gcp-btn-secondary gcp-btn-compact"
-          onClick={() => { localStorage.removeItem('token'); router.push('/') }}
-        >
-          Sign out
-        </button>
-      </header>
+      {topBar}
 
-      <ConsoleNav active={isConsoleHome ? 'hub-home' : tab as ServiceId} onSelect={openService} open={navOpen} onClose={() => setNavOpen(false)} />
+      {!isHubView && (
+        <ConsoleNav active={tab} onSelect={openService} open={navOpen} onClose={() => setNavOpen(false)} />
+      )}
 
       <div ref={mainRef} className="cl-gc-main">
-      <section className={`gcp-console${isConsoleHome ? ' gcp-console--home' : ''}`}>
+      <section className="gcp-console">
         <div className="gcp-console-inner">
-          {!isConsoleHome && (
           <div className="gcp-console-head">
             <div>
               <p className="gcp-kicker">Console</p>
-              <h2>{SERVICE_LABELS[tab as ServiceId]}</h2>
-              {activeProject && !showIamProjects && !showApiKeys && serviceTab !== 'agent-overview' && (
+              <h2>{SERVICE_LABELS[tab]}</h2>
+              {activeProject && !showIamProjects && !showApiKeys && tab !== 'agent-overview' && (
                 <p className="cl-console-sub">{activeProject.name}</p>
               )}
             </div>
           </div>
-          )}
 
           {error && <div className="gcp-form-error">{error}</div>}
-
-          {isConsoleHome && (
-            <ConsoleHome
-              onOpenService={openService}
-              healthIssues={monitoring?.deployments.failed ?? 0}
-              scheduledChanges={0}
-              otherNotifications={0}
-            />
-          )}
 
           {(showDeployments) && (
             <>
@@ -490,7 +492,7 @@ export default function ConsolePage() {
             <>
               <div className="cl-console-actions">
                 <button type="button" className="gcp-btn-primary gcp-btn-compact" onClick={handleCreateKey} disabled={busy}>
-                  {serviceTab === 'agent' ? 'Get Agent Platform API key' : 'Create API key'}
+                  {tab === 'agent' ? 'Get Agent Platform API key' : 'Create API key'}
                 </button>
               </div>
               {newKey && (
@@ -515,19 +517,19 @@ export default function ConsolePage() {
             </>
           )}
 
-          {serviceTab && isOverviewTab(serviceTab) && (
+          {isOverviewTab(tab) && (
             <div className="cl-gc-stub">
-              <p>{SERVICE_LABELS[serviceTab]} — pick a section from the chevron menu to get started.</p>
+              <p>{SERVICE_LABELS[tab]} — pick a section from the chevron menu to get started.</p>
             </div>
           )}
 
-          {serviceTab && isProductStubTab(serviceTab) && (
+          {isProductStubTab(tab) && (
             <div className="cl-gc-stub">
-              <p>{SERVICE_LABELS[serviceTab]} is coming soon on Cloudlane.</p>
+              <p>{SERVICE_LABELS[tab]} is coming soon on Cloudlane.</p>
             </div>
           )}
 
-          {serviceTab === 'storage' && (
+          {tab === 'storage' && (
             <>
               <form className="cl-console-inline-form" onSubmit={handleCreateBucket}>
                 <input required placeholder="Bucket name" value={bucketName} onChange={(e) => setBucketName(e.target.value)} />
@@ -547,7 +549,7 @@ export default function ConsolePage() {
             </>
           )}
 
-          {serviceTab === 'billing' && (
+          {tab === 'billing' && (
             <>
               <div className="cl-billing-cards">
                 <article>
@@ -634,7 +636,7 @@ export default function ConsolePage() {
             </>
           )}
 
-          {serviceTab === 'solutions-all' && (
+          {tab === 'solutions-all' && (
             <div className="cl-gc-hub">
               {PRODUCT_IDS.map((id) => (
                 <button type="button" key={id} className="cl-gc-hub-card" onClick={() => openService(id)}>
@@ -662,25 +664,25 @@ export default function ConsolePage() {
             </div>
           )}
 
-          {serviceTab === 'solutions' && (
+          {tab === 'solutions' && (
             <div className="cl-gc-stub">
               <p>Blueprints for API backends, staging previews, and scale-to-zero workers. Click the arrow on Solutions to browse all products, deployments, and the App Design Center.</p>
             </div>
           )}
 
-          {serviceTab === 'solutions-app-design' && (
+          {tab === 'solutions-app-design' && (
             <div className="cl-gc-stub">
               <p>Compose services, routes, and env vars visually before you deploy. Coming soon.</p>
             </div>
           )}
 
-          {serviceTab && (serviceTab === 'hub-optimization' || serviceTab === 'hub-quotas' || serviceTab === 'hub-maintenance' || serviceTab === 'hub-support') && (
+          {(tab === 'hub-optimization' || tab === 'hub-quotas' || tab === 'hub-maintenance' || tab === 'hub-support') && (
             <div className="cl-gc-stub">
-              <p>{SERVICE_LABELS[serviceTab]} is on the roadmap. Deploy and monitor services from the Cloud Hub menu today.</p>
+              <p>{SERVICE_LABELS[tab]} is on the roadmap. Deploy and monitor services from the Cloud Hub menu today.</p>
             </div>
           )}
 
-          {serviceTab === 'marketplace' && (
+          {tab === 'marketplace' && (
             <div className="cl-gc-stub">
               <p>Third-party images and add-ons will land here. Deploy from Cloud Run in the meantime.</p>
             </div>
