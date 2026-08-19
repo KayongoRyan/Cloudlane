@@ -2,6 +2,8 @@
 
 import { useState, type ReactNode } from 'react'
 import { useRouter } from 'next/navigation'
+import ActivityMonitoringView from './ActivityMonitoringView'
+import RecommendationsView from './RecommendationsView'
 import type { ServiceId } from './consoleNavMenus'
 
 type HomeTab = 'dashboard' | 'activity' | 'recommendations'
@@ -270,21 +272,17 @@ export default function HomeDashboard({ project, apiHealthy, onOpenService }: Ho
       )}
 
       {tab === 'activity' && (
-        <div className="cl-home-stub-panel">
-          <p>Recent project activity — deploys, IAM changes, and API calls will appear here.</p>
-          <button type="button" className="gcp-btn-secondary gcp-btn-compact" onClick={() => open('iam-audit-logs')}>
-            View audit logs
-          </button>
-        </div>
+        <ActivityMonitoringView
+          project={project}
+          onOpenService={(id) => open(id)}
+        />
       )}
 
       {tab === 'recommendations' && (
-        <div className="cl-home-stub-panel">
-          <p>Optimization tips, security findings, and cost recommendations will surface here.</p>
-          <button type="button" className="gcp-btn-secondary gcp-btn-compact" onClick={() => open('hub-optimization')}>
-            View optimization hub
-          </button>
-        </div>
+        <RecommendationsView
+          project={project}
+          onOpenService={(id) => open(id)}
+        />
       )}
     </div>
   )
