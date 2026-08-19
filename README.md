@@ -16,7 +16,7 @@ cloudlane deploy --image myrepo/app:v1 --port 8080
 | Dashboard | [cloudlane-dashboard.vercel.app](https://cloudlane-dashboard.vercel.app) |
 | API | [comfy-starlight-51c0e7.netlify.app](https://comfy-starlight-51c0e7.netlify.app) |
 
-`GET /health` → `{"status":"ok",...}`. Host setup: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+`GET /health` → `{"status":"ok",...}`. Host setup: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Architecture: [docs/architecture.md](docs/architecture.md).
 
 ## How it works
 
