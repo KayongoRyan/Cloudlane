@@ -69,6 +69,23 @@ services:
     depends_on:
       - redis
 
+  provision-worker:
+    image: python:3.13-slim
+    container_name: cloudlane-provision-worker
+    working_dir: /app
+    command: sh -c "pip install -q -r requirements.txt && python worker.py"
+    volumes:
+      - ./apps/api_python:/app
+      - ./infra/nginx/gateways:/app/infra/nginx/gateways
+    environment:
+      DATABASE_URL: mongodb://cloudlane:${MONGO_PASSWORD:-cloudlane}@mongo:27017/cloudlane?authSource=admin
+      BASE_DOMAIN: ${BASE_DOMAIN:-cloudlane.run}
+      GATEWAY_CONFIG_DIR: infra/nginx/gateways
+      WORKER_POLL_INTERVAL: ${WORKER_POLL_INTERVAL:-2}
+      PROVISION_MAX_ATTEMPTS: ${PROVISION_MAX_ATTEMPTS:-3}
+    depends_on:
+      - mongo
+
 volumes:
   cloudlane_mongo_data:
   cloudlane_minio_data:

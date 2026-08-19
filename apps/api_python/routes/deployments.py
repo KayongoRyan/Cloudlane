@@ -1,6 +1,5 @@
 import re
 import secrets
-from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
@@ -8,22 +7,8 @@ import database as db
 from auth import AuthContext, authenticate_request, client_ip, require_scopes
 from config import get_settings
 from schemas import DeploymentCreate
-from services.kubernetes import kubernetes_service
 
 router = APIRouter()
-
-
-def record_deploy_usage(tenant_id: str, deployment_id: str, cpu: float) -> None:
-    now = datetime.now(timezone.utc)
-    window_start = now - timedelta(minutes=1)
-    db.create_usage_metric({
-        'tenantId': tenant_id,
-        'deploymentId': deployment_id,
-        'metricType': 'compute_seconds',
-        'value': max(cpu * 60, 1),
-        'windowStart': window_start,
-        'windowEnd': now,
-    })
 
 
 @router.get('/')
@@ -47,7 +32,7 @@ async def get_deployment(deployment_id: str, auth: AuthContext = Depends(authent
     return {'deployment': deployment}
 
 
-@router.post('/', status_code=status.HTTP_201_CREATED)
+@router.post('/', status_code=status.HTTP_202_ACCEPTED)
 async def create_deployment(
     payload: DeploymentCreate,
     request: Request,
@@ -79,6 +64,7 @@ async def create_deployment(
     deployment_name = payload.name.replace(' ', '-').lower()
     min_instances = payload.minInstances if payload.minInstances is not None else 0
     max_instances = min(payload.maxInstances if payload.maxInstances is not None else 3, limits['maxInstances'])
+    cpu = payload.cpu if payload.cpu is not None else 0.5
 
     deployment = db.create_deployment({
         'tenantId': auth.tenant_id,
@@ -86,14 +72,30 @@ async def create_deployment(
         'name': deployment_name,
         'slug': slug,
         'image': payload.image,
-        'cpu': payload.cpu if payload.cpu is not None else 0.5,
+        'cpu': cpu,
         'memory': payload.memory if payload.memory is not None else 256,
         'minInstances': min_instances,
         'maxInstances': max_instances,
-        'status': 'deploying',
+        'status': 'provisioning',
+        'statusMessage': 'Queued for provisioning',
         'publicUrl': public_url,
         'k8sNamespace': k8s_namespace,
         'port': payload.port,
+    })
+
+    job = db.create_provision_job({
+        'tenantId': auth.tenant_id,
+        'deploymentId': deployment['id'],
+        'type': 'deployment.create',
+        'payload': {
+            'deploymentName': deployment_name,
+            'image': payload.image,
+            'port': payload.port,
+            'k8sNamespace': k8s_namespace,
+            'host': host,
+            'minInstances': min_instances,
+            'cpu': cpu,
+        },
     })
 
     db.write_audit_log({
@@ -102,35 +104,16 @@ async def create_deployment(
         'action': 'deployment.create',
         'resourceType': 'deployment',
         'resourceId': deployment['id'],
-        'changes': {'name': deployment_name, 'image': payload.image, 'publicUrl': public_url},
+        'changes': {
+            'name': deployment_name,
+            'image': payload.image,
+            'publicUrl': public_url,
+            'jobId': job['id'],
+        },
         'ipAddress': client_ip(request),
     })
 
-    if not kubernetes_service.is_ready():
-        failed = db.update_deployment_status(deployment['id'], 'pending')
-        return {
-            'deployment': failed,
-            'warning': 'Kubernetes not configured — deployment recorded; connect a cluster to go live.',
-        }
-
-    try:
-        kubernetes_service.create_namespace(
-            k8s_namespace,
-            {'tenant-id': auth.tenant_id, 'cloudlane.io/managed': 'true'},
-        )
-        kubernetes_service.create_deployment(
-            k8s_namespace, deployment_name, payload.image, payload.port, min_instances or 1
-        )
-        kubernetes_service.create_service(k8s_namespace, deployment_name, payload.port, payload.port)
-        kubernetes_service.create_ingress(
-            k8s_namespace, f'{deployment_name}-ingress', deployment_name, host, payload.port
-        )
-        running = db.update_deployment_status(deployment['id'], 'running')
-        record_deploy_usage(auth.tenant_id, deployment['id'], deployment.get('cpu', 0.5))
-        return {'deployment': running}
-    except Exception as exc:
-        db.update_deployment_status(deployment['id'], 'failed')
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+    return {'deployment': deployment, 'jobId': job['id']}
 
 
 @router.delete('/{deployment_id}', status_code=status.HTTP_204_NO_CONTENT)
@@ -160,6 +143,8 @@ async def deployment_logs(
     tail: int = Query(default=100, ge=1, le=1000),
 ):
     require_scopes(auth, 'read')
+    from services.kubernetes import kubernetes_service
+
     deployment = db.find_deployment_by_name(deployment_name, auth.tenant_id)
     if not deployment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Deployment not found')

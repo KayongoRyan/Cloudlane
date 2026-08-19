@@ -181,10 +181,11 @@ Default domain: `gateway.cloudlane.run` (see `GATEWAY_BASE_DOMAIN` in `config.py
 | Tenant scoping | `tenantId` on all Mongo docs; `database.py` `tenant_clause()` | Live |
 | K8s namespace isolation | Per-tenant namespace in `deployments.py` | When `KUBECONFIG` set |
 | Kubernetes provisioning | `services/kubernetes.py` — namespace, deployment, service, ingress | Optional |
+| Async provision worker | `worker.py`, `services/provision_worker.py`, `provision_jobs` collection | Live |
 | Quota | `DEFAULT_TENANT_LIMITS` in `database.py`; deploy count check in `deployments.py` | Partial |
 | Rate limiting | `services/redis_client.py` | Live |
 | Terraform / IaC | — | Not built |
-| Async job queue | — | Not built (deploy is sync in route handler) |
+| Async job queue | — | Implemented via `provision_jobs` |
 
 **Models:** `apps/api_python/schemas.py`  
 **Persistence:** `apps/api_python/database.py` (mappers, CRUD, `ensure_indexes()`)
@@ -248,6 +249,7 @@ Host ports `6380` / `9010` avoid conflicts when another Redis or MinIO already o
 | Resources | Projects, buckets, gateways; VMs stub; no RDS |
 | Usage / Bills | Metrics + basic billing |
 | Terraform / IaC | Missing |
+| Async job queue | Mongo `provision_jobs` + `provision-worker` container |
 | Quota manager | Partial (tenant limits, deploy count) |
 | Rate limiter | Redis on control plane + gateway edge |
 | EC2 / VMs | API stub |
@@ -259,7 +261,7 @@ Host ports `6380` / `9010` avoid conflicts when another Redis or MinIO already o
 
 ## Recommended build order
 
-1. **Async orchestrator** — deployment state machine (`provisioning` → `running` → `failed`); worker outside the request path.
+1. ~~**Async orchestrator**~~ — done (`provision_jobs` + worker; deploy returns 202)
 2. **Quota service** — enforce CPU, memory, and storage limits consistently, not only deploy count.
 3. **Provider driver interface** — `Provisioner.create_deployment()`, `create_bucket()`, etc., instead of inline K8s/MinIO calls in route handlers.
 4. **General load balancer product** — separate from API Gateway if L4/L7 for VMs/K8s is needed.

@@ -5,7 +5,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from bson import ObjectId
-from pymongo import MongoClient
+from pymongo import MongoClient, ReturnDocument
 from pymongo.collection import Collection
 from pymongo.database import Database
 
@@ -122,6 +122,7 @@ def map_deployment(doc: dict[str, Any]) -> dict[str, Any]:
         'minInstances': doc.get('minInstances', doc.get('minReplicas', 0)),
         'maxInstances': doc.get('maxInstances', doc.get('maxReplicas', 3)),
         'status': doc['status'],
+        'statusMessage': doc.get('statusMessage'),
         'publicUrl': public_url or '',
         'k8sNamespace': doc.get('k8sNamespace') or doc.get('kubernetesNamespace', ''),
         'port': doc.get('port', 8080),
@@ -266,11 +267,25 @@ def map_gateway_key(doc: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def map_provision_job(doc: dict[str, Any]) -> dict[str, Any]:
+    return {
+        'id': ref_str(doc['_id']),
+        'tenantId': ref_str(doc['tenantId']),
+        'deploymentId': ref_str(doc['deploymentId']),
+        'type': doc.get('type', 'deployment.create'),
+        'status': doc['status'],
+        'payload': doc.get('payload') or {},
+        'error': doc.get('error'),
+        'attempts': doc.get('attempts', 0),
+        'createdAt': doc.get('createdAt'),
+        'updatedAt': doc.get('updatedAt'),
+    }
+
+
 def get_db() -> Database:
     global _client, _db
     if _db is not None:
         return _db
-
     settings = get_settings()
     url = to_direct_mongo_url(settings.database_url)
     if not url or not url.startswith('mongodb'):
@@ -282,7 +297,6 @@ def get_db() -> Database:
         raise RuntimeError(hint)
     if settings.is_netlify and 'localhost' in url:
         raise RuntimeError('DATABASE_URL cannot point to localhost on Netlify. Use MongoDB Atlas.')
-
     _client = MongoClient(
         url,
         serverSelectionTimeoutMS=4000,
@@ -308,48 +322,36 @@ def ping_database() -> bool:
 
 
 def ensure_indexes() -> None:
-    settings = get_settings()
-    if settings.is_netlify:
+    if get_settings().is_netlify:
         return
-    tenants = col('tenants')
-    users = col('users')
-    deployments = col('deployments')
-    api_keys = col('api_keys')
-    audit_logs = col('audit_logs')
-    usage_metrics = col('usage_metrics')
-    projects = col('projects')
-    buckets = col('buckets')
-    invoices = col('invoices')
-    vms = col('vms')
-    gateways = col('gateways')
-    gateway_routes = col('gateway_routes')
-    gateway_keys = col('gateway_keys')
-    tenants.create_index('slug', unique=True)
-    users.create_index('email', unique=True)
-    users.create_index('tenantId')
-    deployments.create_index('publicUrl', unique=True, sparse=True)
-    deployments.create_index([('tenantId', 1), ('slug', 1)])
-    deployments.create_index('tenantId')
-    api_keys.create_index('prefix')
-    api_keys.create_index('tenantId')
-    api_keys.create_index('userId')
-    audit_logs.create_index([('tenantId', 1), ('createdAt', -1)])
-    usage_metrics.create_index([('tenantId', 1), ('deploymentId', 1), ('windowStart', -1)])
-    projects.create_index([('tenantId', 1), ('slug', 1)], unique=True)
-    buckets.create_index([('tenantId', 1), ('name', 1)], unique=True)
-    invoices.create_index([('tenantId', 1), ('createdAt', -1)])
-    vms.create_index([('tenantId', 1), ('name', 1)])
-    gateways.create_index([('tenantId', 1), ('slug', 1)], unique=True)
-    gateways.create_index('tenantId')
-    gateways.create_index('projectId')
-    gateway_routes.create_index(
+    col('tenants').create_index('slug', unique=True)
+    col('users').create_index('email', unique=True)
+    col('users').create_index('tenantId')
+    col('deployments').create_index('publicUrl', unique=True, sparse=True)
+    col('deployments').create_index([('tenantId', 1), ('slug', 1)])
+    col('deployments').create_index('tenantId')
+    col('api_keys').create_index('prefix')
+    col('api_keys').create_index('tenantId')
+    col('api_keys').create_index('userId')
+    col('audit_logs').create_index([('tenantId', 1), ('createdAt', -1)])
+    col('usage_metrics').create_index([('tenantId', 1), ('deploymentId', 1), ('windowStart', -1)])
+    col('projects').create_index([('tenantId', 1), ('slug', 1)], unique=True)
+    col('buckets').create_index([('tenantId', 1), ('name', 1)], unique=True)
+    col('invoices').create_index([('tenantId', 1), ('createdAt', -1)])
+    col('vms').create_index([('tenantId', 1), ('name', 1)])
+    col('gateways').create_index([('tenantId', 1), ('slug', 1)], unique=True)
+    col('gateways').create_index('tenantId')
+    col('gateways').create_index('projectId')
+    col('gateway_routes').create_index(
         [('gatewayId', 1), ('stage', 1), ('method', 1), ('path', 1)],
         unique=True,
     )
-    gateway_routes.create_index('gatewayId')
-    gateway_keys.create_index('prefix')
-    gateway_keys.create_index('gatewayId')
-    gateway_keys.create_index('tenantId')
+    col('gateway_routes').create_index('gatewayId')
+    col('gateway_keys').create_index('prefix')
+    col('gateway_keys').create_index('gatewayId')
+    col('gateway_keys').create_index('tenantId')
+    col('provision_jobs').create_index([('status', 1), ('createdAt', 1)])
+    col('provision_jobs').create_index('deploymentId')
 
 
 def find_user_by_email(email: str) -> dict[str, Any] | None:
@@ -371,7 +373,7 @@ def create_user_and_tenant(name: str, slug: str, email: str, password_hash: str)
     tenants = col('tenants')
     users = col('users')
     now = datetime.now(timezone.utc)
-    tenant_doc = {
+    tenant_result = tenants.insert_one({
         'slug': slug,
         'name': name,
         'status': 'active',
@@ -379,8 +381,7 @@ def create_user_and_tenant(name: str, slug: str, email: str, password_hash: str)
         'limits': dict(DEFAULT_TENANT_LIMITS),
         'irembopayCustomerId': None,
         'createdAt': now,
-    }
-    tenant_result = tenants.insert_one(tenant_doc)
+    })
     try:
         user_doc = {
             'tenantId': tenant_result.inserted_id,
@@ -396,6 +397,13 @@ def create_user_and_tenant(name: str, slug: str, email: str, password_hash: str)
     except Exception:
         tenants.delete_one({'_id': tenant_result.inserted_id})
         raise
+
+
+def find_tenant(tenant_id: str) -> dict[str, Any] | None:
+    if not is_object_id_string(tenant_id):
+        return None
+    doc = col('tenants').find_one({'_id': as_object_id(tenant_id)})
+    return map_tenant(doc) if doc else None
 
 
 def list_deployments(tenant_id: str) -> list[dict[str, Any]]:
@@ -429,6 +437,7 @@ def create_deployment(input_data: dict[str, Any]) -> dict[str, Any]:
         'minInstances': input_data.get('minInstances', 0),
         'maxInstances': input_data.get('maxInstances', 3),
         'status': input_data['status'],
+        'statusMessage': input_data.get('statusMessage'),
         'publicUrl': input_data['publicUrl'],
         'k8sNamespace': input_data['k8sNamespace'],
         'port': input_data['port'],
@@ -441,17 +450,50 @@ def create_deployment(input_data: dict[str, Any]) -> dict[str, Any]:
     return map_deployment(doc)
 
 
-def update_deployment_status(deployment_id: str, status: str) -> dict[str, Any]:
+def update_deployment(deployment_id: str, updates: dict[str, Any]) -> dict[str, Any]:
     if not is_object_id_string(deployment_id):
         raise ValueError('Deployment not found')
     doc = col('deployments').find_one_and_update(
         {'_id': as_object_id(deployment_id)},
-        {'$set': {'status': status}},
-        return_document=True,
+        {'$set': updates},
+        return_document=ReturnDocument.AFTER,
     )
     if not doc:
         raise ValueError('Deployment not found')
     return map_deployment(doc)
+
+
+def update_deployment_status(deployment_id: str, status: str, status_message: str | None = None) -> dict[str, Any]:
+    updates: dict[str, Any] = {'status': status}
+    if status_message is not None:
+        updates['statusMessage'] = status_message
+    return update_deployment(deployment_id, updates)
+
+
+def count_deployments(tenant_id: str) -> int:
+    return col('deployments').count_documents({
+        **tenant_clause(tenant_id),
+        '$or': [{'deletedAt': None}, {'deletedAt': {'$exists': False}}],
+    })
+
+
+def find_deployment_by_name(name: str, tenant_id: str) -> dict[str, Any] | None:
+    doc = col('deployments').find_one({
+        'name': name,
+        **tenant_clause(tenant_id),
+        '$or': [{'deletedAt': None}, {'deletedAt': {'$exists': False}}],
+    })
+    return map_deployment(doc) if doc else None
+
+
+def soft_delete_deployment(deployment_id: str, tenant_id: str) -> bool:
+    if not is_object_id_string(deployment_id):
+        return False
+    result = col('deployments').update_one(
+        {'_id': as_object_id(deployment_id), **tenant_clause(tenant_id)},
+        {'$set': {'status': 'stopped', 'deletedAt': datetime.now(timezone.utc)}},
+    )
+    return result.modified_count == 1
 
 
 def find_api_key(prefix: str, key_hash: str) -> dict[str, Any] | None:
@@ -498,6 +540,13 @@ def delete_api_key(key_id: str, tenant_id: str) -> bool:
         return False
     result = col('api_keys').delete_one({'_id': as_object_id(key_id), **tenant_clause(tenant_id)})
     return result.deleted_count == 1
+
+
+def find_api_key_record(key_id: str, tenant_id: str) -> dict[str, Any] | None:
+    if not is_object_id_string(key_id):
+        return None
+    doc = col('api_keys').find_one({'_id': as_object_id(key_id), **tenant_clause(tenant_id)})
+    return map_api_key(doc) if doc else None
 
 
 def write_audit_log(input_data: dict[str, Any]) -> None:
@@ -550,37 +599,13 @@ def list_usage_metrics(tenant_id: str, deployment_id: str | None = None, limit: 
     return [map_usage_metric(doc) for doc in docs]
 
 
-def find_tenant(tenant_id: str) -> dict[str, Any] | None:
-    if not is_object_id_string(tenant_id):
-        return None
-    doc = col('tenants').find_one({'_id': as_object_id(tenant_id)})
-    return map_tenant(doc) if doc else None
-
-
-def count_deployments(tenant_id: str) -> int:
-    return col('deployments').count_documents({
-        **tenant_clause(tenant_id),
-        '$or': [{'deletedAt': None}, {'deletedAt': {'$exists': False}}],
-    })
-
-
-def find_deployment_by_name(name: str, tenant_id: str) -> dict[str, Any] | None:
-    doc = col('deployments').find_one({
-        'name': name,
-        **tenant_clause(tenant_id),
-        '$or': [{'deletedAt': None}, {'deletedAt': {'$exists': False}}],
-    })
-    return map_deployment(doc) if doc else None
-
-
-def soft_delete_deployment(deployment_id: str, tenant_id: str) -> bool:
-    if not is_object_id_string(deployment_id):
-        return False
-    result = col('deployments').update_one(
-        {'_id': as_object_id(deployment_id), **tenant_clause(tenant_id)},
-        {'$set': {'status': 'stopped', 'deletedAt': datetime.now(timezone.utc)}},
-    )
-    return result.modified_count == 1
+def sum_usage_for_tenant(tenant_id: str, metric_type: str = 'compute_seconds') -> float:
+    pipeline = [
+        {'$match': {**tenant_clause(tenant_id), 'metricType': metric_type}},
+        {'$group': {'_id': None, 'total': {'$sum': '$value'}}},
+    ]
+    result = list(col('usage_metrics').aggregate(pipeline))
+    return float(result[0]['total']) if result else 0.0
 
 
 def list_projects(tenant_id: str) -> list[dict[str, Any]]:
@@ -672,18 +697,9 @@ def update_invoice(invoice_id: str, tenant_id: str, updates: dict[str, Any]) -> 
     doc = col('invoices').find_one_and_update(
         {'_id': as_object_id(invoice_id), **tenant_clause(tenant_id)},
         {'$set': updates},
-        return_document=True,
+        return_document=ReturnDocument.AFTER,
     )
     return map_invoice(doc) if doc else None
-
-
-def sum_usage_for_tenant(tenant_id: str, metric_type: str = 'compute_seconds') -> float:
-    pipeline = [
-        {'$match': {**tenant_clause(tenant_id), 'metricType': metric_type}},
-        {'$group': {'_id': None, 'total': {'$sum': '$value'}}},
-    ]
-    result = list(col('usage_metrics').aggregate(pipeline))
-    return float(result[0]['total']) if result else 0.0
 
 
 def list_vms(tenant_id: str, project_id: str | None = None) -> list[dict[str, Any]]:
@@ -720,16 +736,9 @@ def update_vm_status(vm_id: str, tenant_id: str, status: str) -> dict[str, Any] 
     doc = col('vms').find_one_and_update(
         {'_id': as_object_id(vm_id), **tenant_clause(tenant_id)},
         {'$set': {'status': status}},
-        return_document=True,
+        return_document=ReturnDocument.AFTER,
     )
     return map_vm(doc) if doc else None
-
-
-def find_api_key_record(key_id: str, tenant_id: str) -> dict[str, Any] | None:
-    if not is_object_id_string(key_id):
-        return None
-    doc = col('api_keys').find_one({'_id': as_object_id(key_id), **tenant_clause(tenant_id)})
-    return map_api_key(doc) if doc else None
 
 
 def list_gateways(tenant_id: str, project_id: str | None = None) -> list[dict[str, Any]]:
@@ -784,7 +793,7 @@ def update_gateway(gateway_id: str, tenant_id: str, updates: dict[str, Any]) -> 
     doc = col('gateways').find_one_and_update(
         {'_id': as_object_id(gateway_id), **tenant_clause(tenant_id)},
         {'$set': updates},
-        return_document=True,
+        return_document=ReturnDocument.AFTER,
     )
     return map_gateway(doc) if doc else None
 
@@ -851,7 +860,7 @@ def update_gateway_route(route_id: str, gateway_id: str, updates: dict[str, Any]
     doc = col('gateway_routes').find_one_and_update(
         {'_id': as_object_id(route_id), 'gatewayId': as_object_id(gateway_id)},
         {'$set': updates},
-        return_document=True,
+        return_document=ReturnDocument.AFTER,
     )
     return map_gateway_route(doc) if doc else None
 
@@ -932,3 +941,65 @@ def mark_gateway_key_used(key_id: str) -> None:
 def list_all_active_gateways() -> list[dict[str, Any]]:
     docs = col('gateways').find({'status': 'active'}).sort('createdAt', -1)
     return [map_gateway(doc) for doc in docs]
+
+
+def create_provision_job(input_data: dict[str, Any]) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    doc = {
+        'tenantId': oid_or_raw(input_data['tenantId']),
+        'deploymentId': oid_or_raw(input_data['deploymentId']),
+        'type': input_data.get('type', 'deployment.create'),
+        'status': 'queued',
+        'payload': input_data.get('payload') or {},
+        'error': None,
+        'attempts': 0,
+        'createdAt': now,
+        'updatedAt': now,
+    }
+    result = col('provision_jobs').insert_one(doc)
+    doc['_id'] = result.inserted_id
+    return map_provision_job(doc)
+
+
+def find_provision_job_by_id(job_id: str) -> dict[str, Any] | None:
+    if not is_object_id_string(job_id):
+        return None
+    doc = col('provision_jobs').find_one({'_id': as_object_id(job_id)})
+    return map_provision_job(doc) if doc else None
+
+
+def claim_next_provision_job() -> dict[str, Any] | None:
+    now = datetime.now(timezone.utc)
+    doc = col('provision_jobs').find_one_and_update(
+        {'status': 'queued'},
+        {'$set': {'status': 'processing', 'updatedAt': now}, '$inc': {'attempts': 1}},
+        sort=[('createdAt', 1)],
+        return_document=ReturnDocument.AFTER,
+    )
+    return map_provision_job(doc) if doc else None
+
+
+def complete_provision_job(job_id: str, status: str, error: str | None = None) -> dict[str, Any] | None:
+    if not is_object_id_string(job_id):
+        return None
+    updates: dict[str, Any] = {'status': status, 'updatedAt': datetime.now(timezone.utc)}
+    if error is not None:
+        updates['error'] = error
+    doc = col('provision_jobs').find_one_and_update(
+        {'_id': as_object_id(job_id)},
+        {'$set': updates},
+        return_document=ReturnDocument.AFTER,
+    )
+    return map_provision_job(doc) if doc else None
+
+
+def requeue_provision_job(job_id: str, error: str) -> dict[str, Any] | None:
+    if not is_object_id_string(job_id):
+        return None
+    doc = col('provision_jobs').find_one_and_update(
+        {'_id': as_object_id(job_id)},
+        {'$set': {'status': 'queued', 'error': error, 'updatedAt': datetime.now(timezone.utc)}},
+        return_document=ReturnDocument.AFTER,
+    )
+    return map_provision_job(doc) if doc else None
+

@@ -36,6 +36,7 @@ interface Deployment {
   image: string
   publicUrl?: string
   status: string
+  statusMessage?: string
   port: number
   projectId?: string
   createdAt?: string
@@ -212,6 +213,18 @@ export default function ConsolePage() {
     ['console-deployments', projectId],
     () => fetcher<{ deployments: Deployment[] }>(`/api/deployments${projectQuery}`),
   )
+
+  useEffect(() => {
+    const deps = depData?.deployments ?? []
+    const provisioning = deps.some(
+      (d) => d.status === 'provisioning' || d.status === 'deploying',
+    )
+    if (!provisioning) return
+    const id = setInterval(() => {
+      void mutateDeps()
+    }, 3000)
+    return () => clearInterval(id)
+  }, [depData, mutateDeps])
 
   const showDeployments =
     RUN_DEPLOY_TABS.includes(tab) ||
@@ -639,6 +652,9 @@ export default function ConsolePage() {
                       <span className="gcp-muted">—</span>
                     )}
                     <span className={`gcp-status gcp-status-${d.status}`}>{d.status}</span>
+                    {d.statusMessage && (
+                      <span className="gcp-muted cl-console-status-msg">{d.statusMessage}</span>
+                    )}
                     <button type="button" className="cl-console-row-action" onClick={() => handleDeleteDeployment(d.id)} disabled={busy}>Stop</button>
                   </div>
                 ))}

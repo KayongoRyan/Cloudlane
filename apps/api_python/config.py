@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
 
     port: int = 8001
-    database_url: str = 'mongodb://localhost:27017/cloudlane'
+    database_url: str = 'mongodb://cloudlane:cloudlane@localhost:27017/cloudlane?authSource=admin'
     jwt_secret: str = 'dev-secret-change-in-production'
     jwt_algorithm: str = 'HS256'
     jwt_expire_minutes: int = 1440
@@ -26,6 +26,8 @@ class Settings(BaseSettings):
     gateway_config_dir: str = 'infra/nginx/gateways'
     control_plane_rate_limit_rpm: int = 1000
     gateway_default_rate_limit_rpm: int = 1000
+    worker_poll_interval_seconds: int = 2
+    provision_max_attempts: int = 3
 
     @property
     def is_netlify(self) -> bool:
@@ -34,17 +36,12 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
-    database_url = os.getenv('DATABASE_URL') or os.getenv('MONGODB_URI') or 'mongodb://localhost:27017/cloudlane'
-    if not database_url and (os.getenv('NETLIFY') or os.getenv('AWS_LAMBDA_FUNCTION_NAME')):
-        database_url = ''
-    return Settings(
-        database_url=database_url,
-        minio_endpoint=os.getenv('MINIO_ENDPOINT', 'localhost:9010'),
-        minio_access_key=os.getenv('MINIO_ACCESS_KEY', 'cloudlane'),
-        minio_secret_key=os.getenv('MINIO_SECRET_KEY', 'cloudlane-secret'),
-        irembopay_api_key=os.getenv('IREMBOPAY_API_KEY', ''),
-        irembopay_api_url=os.getenv('IREMBOPAY_API_URL', 'https://api.irembopay.com'),
-        gateway_base_domain=os.getenv('GATEWAY_BASE_DOMAIN', 'gateway.cloudlane.run'),
-        redis_url=os.getenv('REDIS_URL', 'redis://localhost:6380/0'),
-        gateway_config_dir=os.getenv('GATEWAY_CONFIG_DIR', 'infra/nginx/gateways'),
-    )
+    overrides: dict[str, str | int] = {}
+    if os.getenv('DATABASE_URL'):
+        overrides['database_url'] = os.getenv('DATABASE_URL')
+    elif os.getenv('MONGODB_URI'):
+        overrides['database_url'] = os.getenv('MONGODB_URI')
+    if os.getenv('NETLIFY') or os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
+        if 'database_url' not in overrides:
+            overrides['database_url'] = os.getenv('DATABASE_URL') or os.getenv('MONGODB_URI') or ''
+    return Settings(**overrides)

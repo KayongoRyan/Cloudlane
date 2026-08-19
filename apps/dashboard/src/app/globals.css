@@ -1668,9 +1668,16 @@ button {
 }
 
 .gcp-status-pending,
-.gcp-status-deploying {
+.gcp-status-deploying,
+.gcp-status-provisioning {
   background: var(--cl-grey);
   color: var(--cl-forest-deep);
+}
+
+.cl-console-status-msg {
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 0.2rem;
 }
 
 .gcp-empty {
