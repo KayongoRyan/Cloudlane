@@ -52,8 +52,45 @@ class ApiKeyCreate(BaseModel):
 
 
 class UsageMetricCreate(BaseModel):
-    deploymentId: str
+    deploymentId: str | None = None
+    gatewayId: str | None = None
     metricType: str
     value: float
     windowStart: str
     windowEnd: str
+
+
+class GatewayCreate(BaseModel):
+    name: str = Field(..., min_length=2)
+    projectId: str | None = None
+    defaultStage: str = Field(default='prod', pattern='^(prod|dev)$')
+
+
+class GatewayUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2)
+    status: str | None = Field(default=None, pattern='^(active|disabled)$')
+    defaultStage: str | None = Field(default=None, pattern='^(prod|dev)$')
+
+
+class GatewayRouteCreate(BaseModel):
+    stage: str = Field(default='prod', pattern='^(prod|dev)$')
+    method: str = Field(default='GET', min_length=3, max_length=10)
+    path: str = Field(..., min_length=1)
+    targetDeploymentId: str
+    stripPathPrefix: bool = False
+    timeoutMs: int = Field(default=30000, ge=1000, le=120000)
+
+
+class GatewayRouteUpdate(BaseModel):
+    stage: str | None = Field(default=None, pattern='^(prod|dev)$')
+    method: str | None = Field(default=None, min_length=3, max_length=10)
+    path: str | None = Field(default=None, min_length=1)
+    targetDeploymentId: str | None = None
+    stripPathPrefix: bool | None = None
+    timeoutMs: int | None = Field(default=None, ge=1000, le=120000)
+
+
+class GatewayKeyCreate(BaseModel):
+    name: str | None = None
+    scopes: list[str] | None = None
+    rateLimitRpm: int = Field(default=1000, ge=1, le=100000)

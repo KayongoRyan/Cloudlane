@@ -46,6 +46,10 @@ export type ServiceId =
   | 'apis-credentials'
   | 'apis-oauth-consent'
   | 'apis-page-usage'
+  | 'gateway'
+  | 'gateway-routes'
+  | 'gateway-keys'
+  | 'gateway-deploy'
   | 'agent'
   | 'agent-overview'
   | 'agent-studio'
@@ -259,6 +263,10 @@ export const SERVICE_LABELS: Record<ServiceId, string> = {
   'apis-credentials': 'Credentials',
   'apis-oauth-consent': 'OAuth consent screen',
   'apis-page-usage': 'Page usage agreements',
+  gateway: 'API Gateway',
+  'gateway-routes': 'Routes',
+  'gateway-keys': 'Consumer keys',
+  'gateway-deploy': 'Deploy config',
   agent: 'Agent Platform',
   'agent-overview': 'Overview',
   'agent-studio': 'Studio',
@@ -497,6 +505,14 @@ export const SUBMENU_SECTIONS: Partial<Record<ServiceId, SubMenuSection[]>> = {
       { id: 'apis-credentials', label: 'Credentials' },
       { id: 'apis-oauth-consent', label: 'OAuth consent screen' },
       { id: 'apis-page-usage', label: 'Page usage agreements' },
+    ],
+  }],
+  gateway: [{
+    items: [
+      { id: 'gateway', label: 'Gateways' },
+      { id: 'gateway-routes', label: 'Routes' },
+      { id: 'gateway-keys', label: 'Consumer keys' },
+      { id: 'gateway-deploy', label: 'Deploy config' },
     ],
   }],
   agent: [{
@@ -829,6 +845,7 @@ export function isActiveInMenu(active: ServiceId, parentId: ServiceId): boolean 
   return flattenSubmenu(parentId).some((item) => item.id === active)
 }
 
+export const GATEWAY_TABS: ServiceId[] = ['gateway', 'gateway-routes', 'gateway-keys', 'gateway-deploy']
 export const IAM_PROJECT_TABS: ServiceId[] = ['iam', 'iam-iam', 'iam-create-project', 'iam-manage-resources']
 export const COMPUTE_VM_TABS: ServiceId[] = ['compute', 'compute-vm-instances']
 export const K8S_DEPLOY_TABS: ServiceId[] = ['kubernetes', 'k8s-clusters', 'k8s-workloads']

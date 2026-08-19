@@ -2133,6 +2133,19 @@ button {
   font-size: 0.85rem;
 }
 
+.cl-gateway-config {
+  margin: 0;
+  padding: 1rem;
+  border-radius: 10px;
+  background: #f8f9fa;
+  border: 1px solid var(--cl-stroke);
+  font-size: 0.78rem;
+  line-height: 1.45;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .cl-billing-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));

@@ -14,3 +14,8 @@ def hash_api_key(api_key: str) -> str:
 def generate_api_key() -> tuple[str, str]:
     key = f"cl_{uuid.uuid4().hex}"
     return key, key[:8]
+
+
+def generate_gateway_key() -> tuple[str, str]:
+    key = f"gw_{uuid.uuid4().hex}"
+    return key, key[:8]

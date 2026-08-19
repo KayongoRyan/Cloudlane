@@ -14,6 +14,7 @@ METRIC_TYPES = {
     'requests',
     'idle_seconds',
     'compute_seconds',
+    'gateway_requests',
 }
 
 
@@ -49,13 +50,23 @@ async def create_metric(payload: UsageMetricCreate, request: Request, auth: Auth
     if end <= start:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='windowStart/windowEnd must be valid ISO dates with end > start')
 
-    deployment = db.find_deployment_by_id(payload.deploymentId, auth.tenant_id)
-    if not deployment:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Deployment not found')
+    if payload.metricType == 'gateway_requests':
+        if not payload.gatewayId:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='gatewayId required for gateway_requests')
+        gateway = db.find_gateway_by_id(payload.gatewayId, auth.tenant_id)
+        if not gateway:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Gateway not found')
+    else:
+        if not payload.deploymentId:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail='deploymentId required')
+        deployment = db.find_deployment_by_id(payload.deploymentId, auth.tenant_id)
+        if not deployment:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Deployment not found')
 
     metric = db.create_usage_metric({
         'tenantId': auth.tenant_id,
         'deploymentId': payload.deploymentId,
+        'gatewayId': payload.gatewayId,
         'metricType': payload.metricType,
         'value': payload.value,
         'windowStart': start,
@@ -70,6 +81,7 @@ async def create_metric(payload: UsageMetricCreate, request: Request, auth: Auth
         'resourceId': metric['id'],
         'changes': {
             'deploymentId': payload.deploymentId,
+            'gatewayId': payload.gatewayId,
             'metricType': payload.metricType,
             'value': payload.value,
         },

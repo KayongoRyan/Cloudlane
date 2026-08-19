@@ -17,6 +17,13 @@ from routes.buckets import router as buckets_router
 from routes.billing import router as billing_router
 from routes.monitoring import router as monitoring_router
 from routes.vms import router as vms_router
+from routes.gateways import router as gateways_router
+from routes.gateway_internal import router as gateway_internal_router
+from middleware.control_plane_gateway import (
+    ApiVersionMiddleware,
+    ControlPlaneRateLimitMiddleware,
+    RequestIdMiddleware,
+)
 
 settings = get_settings()
 
@@ -27,6 +34,8 @@ async def lifespan(_app: FastAPI):
         try:
             get_db()
             ensure_indexes()
+            from services.gateway_config import sync_gateway_configs
+            sync_gateway_configs()
         except Exception as exc:
             print(f'Database not ready at startup: {exc}')
     yield
@@ -48,6 +57,10 @@ app.add_middleware(
     allow_headers=['*'],
 )
 
+app.add_middleware(ControlPlaneRateLimitMiddleware)
+app.add_middleware(RequestIdMiddleware)
+app.add_middleware(ApiVersionMiddleware)
+
 app.include_router(auth_router, prefix='/api/auth', tags=['auth'])
 app.include_router(deployments_router, prefix='/api/deployments', tags=['deployments'])
 app.include_router(projects_router, prefix='/api/projects', tags=['projects'])
@@ -56,6 +69,8 @@ app.include_router(buckets_router, prefix='/api/buckets', tags=['buckets'])
 app.include_router(billing_router, prefix='/api/billing', tags=['billing'])
 app.include_router(monitoring_router, prefix='/api/monitoring', tags=['monitoring'])
 app.include_router(vms_router, prefix='/api/vms', tags=['vms'])
+app.include_router(gateways_router, prefix='/api/gateways', tags=['gateways'])
+app.include_router(gateway_internal_router, prefix='/internal/gateway', tags=['gateway-internal'])
 app.include_router(audit_logs_router, prefix='/api/audit-logs', tags=['audit-logs'])
 app.include_router(usage_metrics_router, prefix='/api/usage-metrics', tags=['usage-metrics'])
 app.include_router(health_router, tags=['health'])

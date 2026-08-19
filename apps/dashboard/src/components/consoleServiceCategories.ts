@@ -741,7 +741,7 @@ export const CONSOLE_SERVICE_CATEGORIES: ServiceCategory[] = [
       {
         name: 'API Gateway',
         description: 'Build, deploy, and manage APIs',
-        consoleId: 'apis',
+        consoleId: 'gateway',
       },
       {
         name: 'Cloudlane App Mesh',

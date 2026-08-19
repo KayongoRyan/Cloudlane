@@ -211,11 +211,58 @@ def map_usage_metric(doc: dict[str, Any]) -> dict[str, Any]:
     return {
         'id': ref_str(doc['_id']),
         'tenantId': ref_str(doc['tenantId']),
-        'deploymentId': ref_str(doc['deploymentId']),
+        'deploymentId': ref_str(doc['deploymentId']) if doc.get('deploymentId') else None,
+        'gatewayId': ref_str(doc['gatewayId']) if doc.get('gatewayId') else None,
         'metricType': doc['metricType'],
         'value': doc['value'],
         'windowStart': doc['windowStart'],
         'windowEnd': doc['windowEnd'],
+    }
+
+
+def map_gateway(doc: dict[str, Any]) -> dict[str, Any]:
+    return {
+        'id': ref_str(doc['_id']),
+        'tenantId': ref_str(doc['tenantId']),
+        'projectId': ref_str(doc['projectId']) if doc.get('projectId') else None,
+        'name': doc['name'],
+        'slug': doc['slug'],
+        'status': doc.get('status', 'active'),
+        'hostnames': doc.get('hostnames') or [],
+        'defaultStage': doc.get('defaultStage', 'prod'),
+        'createdAt': doc.get('createdAt'),
+        'updatedAt': doc.get('updatedAt'),
+    }
+
+
+def map_gateway_route(doc: dict[str, Any]) -> dict[str, Any]:
+    return {
+        'id': ref_str(doc['_id']),
+        'gatewayId': ref_str(doc['gatewayId']),
+        'stage': doc.get('stage', 'prod'),
+        'method': doc.get('method', 'GET').upper(),
+        'path': doc['path'],
+        'targetType': doc.get('targetType', 'deployment'),
+        'targetDeploymentId': ref_str(doc['targetDeploymentId']) if doc.get('targetDeploymentId') else None,
+        'stripPathPrefix': bool(doc.get('stripPathPrefix', False)),
+        'timeoutMs': doc.get('timeoutMs', 30000),
+        'createdAt': doc.get('createdAt'),
+        'updatedAt': doc.get('updatedAt'),
+    }
+
+
+def map_gateway_key(doc: dict[str, Any]) -> dict[str, Any]:
+    return {
+        'id': ref_str(doc['_id']),
+        'gatewayId': ref_str(doc['gatewayId']),
+        'tenantId': ref_str(doc['tenantId']),
+        'name': doc.get('name', 'default'),
+        'prefix': doc['prefix'],
+        'scopes': doc.get('scopes') or ['invoke'],
+        'rateLimitRpm': doc.get('rateLimitRpm', 1000),
+        'revokedAt': doc.get('revokedAt'),
+        'lastUsedAt': doc.get('lastUsedAt'),
+        'createdAt': doc.get('createdAt'),
     }
 
 
@@ -274,6 +321,9 @@ def ensure_indexes() -> None:
     buckets = col('buckets')
     invoices = col('invoices')
     vms = col('vms')
+    gateways = col('gateways')
+    gateway_routes = col('gateway_routes')
+    gateway_keys = col('gateway_keys')
     tenants.create_index('slug', unique=True)
     users.create_index('email', unique=True)
     users.create_index('tenantId')
@@ -289,6 +339,17 @@ def ensure_indexes() -> None:
     buckets.create_index([('tenantId', 1), ('name', 1)], unique=True)
     invoices.create_index([('tenantId', 1), ('createdAt', -1)])
     vms.create_index([('tenantId', 1), ('name', 1)])
+    gateways.create_index([('tenantId', 1), ('slug', 1)], unique=True)
+    gateways.create_index('tenantId')
+    gateways.create_index('projectId')
+    gateway_routes.create_index(
+        [('gatewayId', 1), ('stage', 1), ('method', 1), ('path', 1)],
+        unique=True,
+    )
+    gateway_routes.create_index('gatewayId')
+    gateway_keys.create_index('prefix')
+    gateway_keys.create_index('gatewayId')
+    gateway_keys.create_index('tenantId')
 
 
 def find_user_by_email(email: str) -> dict[str, Any] | None:
@@ -465,7 +526,8 @@ def list_audit_logs(tenant_id: str, limit: int = 50) -> list[dict[str, Any]]:
 def create_usage_metric(input_data: dict[str, Any]) -> dict[str, Any]:
     doc = {
         'tenantId': oid_or_raw(input_data['tenantId']),
-        'deploymentId': oid_or_raw(input_data['deploymentId']),
+        'deploymentId': oid_or_raw(input_data['deploymentId']) if input_data.get('deploymentId') else None,
+        'gatewayId': oid_or_raw(input_data['gatewayId']) if input_data.get('gatewayId') else None,
         'metricType': input_data['metricType'],
         'value': input_data['value'],
         'windowStart': input_data['windowStart'],
@@ -668,3 +730,205 @@ def find_api_key_record(key_id: str, tenant_id: str) -> dict[str, Any] | None:
         return None
     doc = col('api_keys').find_one({'_id': as_object_id(key_id), **tenant_clause(tenant_id)})
     return map_api_key(doc) if doc else None
+
+
+def list_gateways(tenant_id: str, project_id: str | None = None) -> list[dict[str, Any]]:
+    filt: dict[str, Any] = {**tenant_clause(tenant_id)}
+    if project_id:
+        filt['projectId'] = oid_or_raw(project_id)
+    docs = col('gateways').find(filt).sort('createdAt', -1)
+    return [map_gateway(doc) for doc in docs]
+
+
+def find_gateway_by_id(gateway_id: str, tenant_id: str) -> dict[str, Any] | None:
+    if not is_object_id_string(gateway_id):
+        return None
+    doc = col('gateways').find_one({'_id': as_object_id(gateway_id), **tenant_clause(tenant_id)})
+    return map_gateway(doc) if doc else None
+
+
+def find_gateway_by_id_any(gateway_id: str) -> dict[str, Any] | None:
+    if not is_object_id_string(gateway_id):
+        return None
+    doc = col('gateways').find_one({'_id': as_object_id(gateway_id)})
+    return map_gateway(doc) if doc else None
+
+
+def find_gateway_by_slug(slug: str, tenant_id: str) -> dict[str, Any] | None:
+    doc = col('gateways').find_one({'slug': slug, **tenant_clause(tenant_id)})
+    return map_gateway(doc) if doc else None
+
+
+def create_gateway(input_data: dict[str, Any]) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    doc = {
+        'tenantId': oid_or_raw(input_data['tenantId']),
+        'projectId': oid_or_raw(input_data['projectId']) if input_data.get('projectId') else None,
+        'name': input_data['name'],
+        'slug': input_data['slug'],
+        'status': input_data.get('status', 'active'),
+        'hostnames': input_data.get('hostnames') or [],
+        'defaultStage': input_data.get('defaultStage', 'prod'),
+        'createdAt': now,
+        'updatedAt': now,
+    }
+    result = col('gateways').insert_one(doc)
+    doc['_id'] = result.inserted_id
+    return map_gateway(doc)
+
+
+def update_gateway(gateway_id: str, tenant_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    if not is_object_id_string(gateway_id):
+        return None
+    updates = {**updates, 'updatedAt': datetime.now(timezone.utc)}
+    doc = col('gateways').find_one_and_update(
+        {'_id': as_object_id(gateway_id), **tenant_clause(tenant_id)},
+        {'$set': updates},
+        return_document=True,
+    )
+    return map_gateway(doc) if doc else None
+
+
+def delete_gateway(gateway_id: str, tenant_id: str) -> bool:
+    if not is_object_id_string(gateway_id):
+        return False
+    gid = as_object_id(gateway_id)
+    result = col('gateways').delete_one({'_id': gid, **tenant_clause(tenant_id)})
+    if result.deleted_count:
+        col('gateway_routes').delete_many({'gatewayId': gid})
+        col('gateway_keys').delete_many({'gatewayId': gid})
+    return result.deleted_count == 1
+
+
+def count_gateway_routes(gateway_id: str) -> int:
+    if not is_object_id_string(gateway_id):
+        return 0
+    return col('gateway_routes').count_documents({'gatewayId': as_object_id(gateway_id)})
+
+
+def list_gateway_routes(gateway_id: str) -> list[dict[str, Any]]:
+    if not is_object_id_string(gateway_id):
+        return []
+    docs = col('gateway_routes').find({'gatewayId': as_object_id(gateway_id)}).sort('path', 1)
+    return [map_gateway_route(doc) for doc in docs]
+
+
+def find_gateway_route_by_id(route_id: str, gateway_id: str) -> dict[str, Any] | None:
+    if not is_object_id_string(route_id) or not is_object_id_string(gateway_id):
+        return None
+    doc = col('gateway_routes').find_one({
+        '_id': as_object_id(route_id),
+        'gatewayId': as_object_id(gateway_id),
+    })
+    return map_gateway_route(doc) if doc else None
+
+
+def create_gateway_route(input_data: dict[str, Any]) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    doc = {
+        'gatewayId': oid_or_raw(input_data['gatewayId']),
+        'stage': input_data.get('stage', 'prod'),
+        'method': input_data.get('method', 'GET').upper(),
+        'path': input_data['path'],
+        'targetType': input_data.get('targetType', 'deployment'),
+        'targetDeploymentId': oid_or_raw(input_data['targetDeploymentId']),
+        'stripPathPrefix': bool(input_data.get('stripPathPrefix', False)),
+        'timeoutMs': input_data.get('timeoutMs', 30000),
+        'createdAt': now,
+        'updatedAt': now,
+    }
+    result = col('gateway_routes').insert_one(doc)
+    doc['_id'] = result.inserted_id
+    return map_gateway_route(doc)
+
+
+def update_gateway_route(route_id: str, gateway_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    if not is_object_id_string(route_id) or not is_object_id_string(gateway_id):
+        return None
+    updates = {**updates, 'updatedAt': datetime.now(timezone.utc)}
+    if 'method' in updates:
+        updates['method'] = updates['method'].upper()
+    doc = col('gateway_routes').find_one_and_update(
+        {'_id': as_object_id(route_id), 'gatewayId': as_object_id(gateway_id)},
+        {'$set': updates},
+        return_document=True,
+    )
+    return map_gateway_route(doc) if doc else None
+
+
+def delete_gateway_route(route_id: str, gateway_id: str) -> bool:
+    if not is_object_id_string(route_id) or not is_object_id_string(gateway_id):
+        return False
+    result = col('gateway_routes').delete_one({
+        '_id': as_object_id(route_id),
+        'gatewayId': as_object_id(gateway_id),
+    })
+    return result.deleted_count == 1
+
+
+def list_gateway_keys(gateway_id: str, tenant_id: str) -> list[dict[str, Any]]:
+    if not is_object_id_string(gateway_id):
+        return []
+    docs = col('gateway_keys').find({
+        'gatewayId': as_object_id(gateway_id),
+        **tenant_clause(tenant_id),
+        '$or': [{'revokedAt': None}, {'revokedAt': {'$exists': False}}],
+    }).sort('createdAt', -1)
+    return [map_gateway_key(doc) for doc in docs]
+
+
+def find_gateway_key(prefix: str, key_hash: str) -> dict[str, Any] | None:
+    doc = col('gateway_keys').find_one({
+        'prefix': prefix,
+        'keyHash': key_hash,
+        '$or': [{'revokedAt': None}, {'revokedAt': {'$exists': False}}],
+    })
+    if not doc:
+        return None
+    mapped = map_gateway_key(doc)
+    mapped['keyHash'] = doc['keyHash']
+    return mapped
+
+
+def create_gateway_key(input_data: dict[str, Any]) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    doc = {
+        'gatewayId': oid_or_raw(input_data['gatewayId']),
+        'tenantId': oid_or_raw(input_data['tenantId']),
+        'name': input_data.get('name', 'default'),
+        'keyHash': input_data['keyHash'],
+        'prefix': input_data['prefix'],
+        'scopes': input_data.get('scopes') or ['invoke'],
+        'rateLimitRpm': input_data.get('rateLimitRpm', 1000),
+        'revokedAt': None,
+        'lastUsedAt': None,
+        'createdAt': now,
+    }
+    result = col('gateway_keys').insert_one(doc)
+    doc['_id'] = result.inserted_id
+    return map_gateway_key(doc)
+
+
+def revoke_gateway_key(key_id: str, gateway_id: str, tenant_id: str) -> bool:
+    if not is_object_id_string(key_id) or not is_object_id_string(gateway_id):
+        return False
+    result = col('gateway_keys').update_one(
+        {
+            '_id': as_object_id(key_id),
+            'gatewayId': as_object_id(gateway_id),
+            **tenant_clause(tenant_id),
+        },
+        {'$set': {'revokedAt': datetime.now(timezone.utc)}},
+    )
+    return result.modified_count == 1
+
+
+def mark_gateway_key_used(key_id: str) -> None:
+    if not is_object_id_string(key_id):
+        return
+    col('gateway_keys').update_one({'_id': as_object_id(key_id)}, {'$set': {'lastUsedAt': datetime.now(timezone.utc)}})
+
+
+def list_all_active_gateways() -> list[dict[str, Any]]:
+    docs = col('gateways').find({'status': 'active'}).sort('createdAt', -1)
+    return [map_gateway(doc) for doc in docs]

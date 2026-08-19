@@ -9,6 +9,7 @@ import { pushRecentService } from '../../../components/recentServices'
 import { useConsoleShell } from '../../../lib/useConsoleShell'
 import ConsoleNav, {
   COMPUTE_VM_TABS,
+  GATEWAY_TABS,
   IAM_PROJECT_TABS,
   isOverviewTab,
   isProductStubTab,
@@ -61,6 +62,36 @@ interface Vm {
   memoryMb: number
   status: string
   publicIp?: string
+}
+
+interface GatewayRow {
+  id: string
+  name: string
+  slug: string
+  status: string
+  hostnames: string[]
+  defaultStage: string
+  routeCount?: number
+  projectId?: string
+}
+
+interface GatewayRouteRow {
+  id: string
+  gatewayId: string
+  stage: string
+  method: string
+  path: string
+  targetDeploymentId: string
+  stripPathPrefix: boolean
+}
+
+interface GatewayKeyRow {
+  id: string
+  name: string
+  prefix: string
+  scopes: string[]
+  rateLimitRpm: number
+  lastUsedAt?: string
 }
 
 interface Invoice {
@@ -134,6 +165,11 @@ export default function ConsolePage() {
   const [projectName, setProjectName] = useState('')
   const [bucketName, setBucketName] = useState('')
   const [vmForm, setVmForm] = useState({ name: '', cpu: 1, memoryMb: 512 })
+  const [gatewayName, setGatewayName] = useState('')
+  const [selectedGatewayId, setSelectedGatewayId] = useState('')
+  const [routeForm, setRouteForm] = useState({ method: 'GET', path: '/v1/', targetDeploymentId: '', stage: 'prod' })
+  const [newGatewayKey, setNewGatewayKey] = useState<string | null>(null)
+  const [deployConfig, setDeployConfig] = useState('')
   const [busy, setBusy] = useState(false)
 
   const fetcher = useCallback(async <T,>(path: string): Promise<T> => {
@@ -189,6 +225,7 @@ export default function ConsolePage() {
   const showComputeVms = COMPUTE_VM_TABS.includes(tab)
   const showIamProjects = IAM_PROJECT_TABS.includes(tab)
   const showApiKeys = tab === 'apis-credentials' || tab === 'agent'
+  const showGateway = GATEWAY_TABS.includes(tab)
 
   const { data: keysData, mutate: mutateKeys } = useSWR(
     showApiKeys ? 'console-keys' : null,
@@ -218,8 +255,44 @@ export default function ConsolePage() {
     showSecurity ? 'console-audit' : null,
     () => fetcher<{ auditLogs: AuditLog[] }>('/api/audit-logs'),
   )
+  const { data: gatewaysData, mutate: mutateGateways } = useSWR(
+    showGateway ? ['console-gateways', projectId] : null,
+    () => fetcher<{ gateways: GatewayRow[] }>(`/api/gateways${projectQuery}`),
+  )
+  const activeGatewayId = selectedGatewayId || gatewaysData?.gateways?.[0]?.id || ''
+  const { data: gatewayRoutesData, mutate: mutateGatewayRoutes } = useSWR(
+    showGateway && activeGatewayId && (tab === 'gateway-routes' || tab === 'gateway-deploy')
+      ? ['console-gateway-routes', activeGatewayId]
+      : null,
+    () => fetcher<{ routes: GatewayRouteRow[] }>(`/api/gateways/${activeGatewayId}/routes`),
+  )
+  const { data: gatewayKeysData, mutate: mutateGatewayKeys } = useSWR(
+    showGateway && activeGatewayId && tab === 'gateway-keys'
+      ? ['console-gateway-keys', activeGatewayId]
+      : null,
+    () => fetcher<{ keys: GatewayKeyRow[] }>(`/api/gateways/${activeGatewayId}/keys`),
+  )
 
   const deployments = depData?.deployments ?? []
+  const gateways = gatewaysData?.gateways ?? []
+  const runningDeployments = deployments.filter((d) => d.status === 'running')
+
+  useEffect(() => {
+    if (!selectedGatewayId && gateways.length) {
+      setSelectedGatewayId(gateways[0].id)
+    }
+  }, [gateways, selectedGatewayId])
+
+  useEffect(() => {
+    if (tab !== 'gateway-deploy' || !activeGatewayId) {
+      setDeployConfig('')
+      return
+    }
+    fetcher<{ config: string }>(`/api/gateways/${activeGatewayId}/deploy`)
+      .then((res) => setDeployConfig(res.config || ''))
+      .catch(() => setDeployConfig(''))
+  }, [tab, activeGatewayId, fetcher, gatewayRoutesData])
+
   const activeProject = useMemo(
     () => projects.find((p) => p.id === projectId) ?? projects[0],
     [projects, projectId],
@@ -353,6 +426,111 @@ export default function ConsolePage() {
     }
   }
 
+  const handleCreateGateway = async (e: FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      const res = await apiSend<{ gateway: GatewayRow }>('/api/gateways', 'POST', {
+        name: gatewayName,
+        projectId: projectId || undefined,
+      })
+      setGatewayName('')
+      await mutateGateways()
+      if (res?.gateway?.id) setSelectedGatewayId(res.gateway.id)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Create gateway failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleToggleGateway = async (id: string, status: string) => {
+    setBusy(true)
+    setError('')
+    try {
+      await apiSend(`/api/gateways/${id}`, 'PATCH', { status: status === 'active' ? 'disabled' : 'active' })
+      await mutateGateways()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Update gateway failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleDeleteGateway = async (id: string) => {
+    setBusy(true)
+    try {
+      await apiSend(`/api/gateways/${id}`, 'DELETE')
+      if (selectedGatewayId === id) setSelectedGatewayId('')
+      await mutateGateways()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Delete gateway failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleCreateRoute = async (e: FormEvent) => {
+    e.preventDefault()
+    if (!activeGatewayId) return
+    setBusy(true)
+    setError('')
+    try {
+      await apiSend(`/api/gateways/${activeGatewayId}/routes`, 'POST', routeForm)
+      setRouteForm({ method: 'GET', path: '/v1/', targetDeploymentId: '', stage: 'prod' })
+      await mutateGatewayRoutes()
+      await mutateGateways()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Create route failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleDeleteRoute = async (routeId: string) => {
+    if (!activeGatewayId) return
+    setBusy(true)
+    try {
+      await apiSend(`/api/gateways/${activeGatewayId}/routes/${routeId}`, 'DELETE')
+      await mutateGatewayRoutes()
+      await mutateGateways()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Delete route failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleCreateGatewayKey = async () => {
+    if (!activeGatewayId) return
+    setBusy(true)
+    setError('')
+    setNewGatewayKey(null)
+    try {
+      const res = await apiSend<{ key: string }>(`/api/gateways/${activeGatewayId}/keys`, 'POST', { name: 'Consumer key' })
+      setNewGatewayKey(res?.key ?? null)
+      await mutateGatewayKeys()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Create key failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleRevokeGatewayKey = async (keyId: string) => {
+    if (!activeGatewayId) return
+    setBusy(true)
+    try {
+      await apiSend(`/api/gateways/${activeGatewayId}/keys/${keyId}`, 'DELETE')
+      await mutateGatewayKeys()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Revoke failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const openFromHub = (id: ServiceId) => {
     pushRecentService(id)
     const target = id === 'db-cloud-sql' ? 'sql-get-started' : id
@@ -428,7 +606,7 @@ export default function ConsolePage() {
             <div>
               <p className="gcp-kicker">Console</p>
               <h2>{SERVICE_LABELS[tab]}</h2>
-              {activeProject && !showIamProjects && !showApiKeys && tab !== 'agent-overview' && (
+              {activeProject && !showIamProjects && !showApiKeys && tab !== 'agent-overview' && !showGateway && (
                 <p className="cl-console-sub">{activeProject.name}</p>
               )}
             </div>
@@ -527,6 +705,152 @@ export default function ConsolePage() {
             <div className="cl-gc-stub">
               <p>{SERVICE_LABELS[tab]} is coming soon on Cloudlane.</p>
             </div>
+          )}
+
+          {showGateway && (
+            <>
+              {gateways.length > 0 && (
+                <div className="cl-console-actions">
+                  <label className="gcp-muted">
+                    Gateway{' '}
+                    <select value={activeGatewayId} onChange={(e) => setSelectedGatewayId(e.target.value)}>
+                      {gateways.map((g) => (
+                        <option key={g.id} value={g.id}>{g.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              )}
+
+              {tab === 'gateway' && (
+                <>
+                  <form className="cl-console-inline-form" onSubmit={handleCreateGateway}>
+                    <input required placeholder="Gateway name" value={gatewayName} onChange={(e) => setGatewayName(e.target.value)} />
+                    <button type="submit" className="gcp-btn-primary gcp-btn-compact" disabled={busy}>Create gateway</button>
+                  </form>
+                  <div className="gcp-table">
+                    <div className="gcp-table-row gcp-table-head cl-table-4">
+                      <span>Name</span><span>Hostname</span><span>Routes</span><span>Status</span>
+                    </div>
+                    {gateways.length === 0 && (
+                      <div className="gcp-table-row cl-console-empty">No gateways yet — create one to front your deployments.</div>
+                    )}
+                    {gateways.map((g) => (
+                      <div key={g.id} className="gcp-table-row cl-table-4">
+                        <span className="gcp-service">{g.name}</span>
+                        <span className="gcp-muted">{g.hostnames[0] ?? '—'}</span>
+                        <span>{g.routeCount ?? 0}</span>
+                        <span className={`gcp-status gcp-status-${g.status}`}>{g.status}</span>
+                        <button type="button" className="cl-console-row-action" onClick={() => handleToggleGateway(g.id, g.status)} disabled={busy}>
+                          {g.status === 'active' ? 'Disable' : 'Enable'}
+                        </button>
+                        <button type="button" className="cl-console-row-action" onClick={() => handleDeleteGateway(g.id)} disabled={busy}>Delete</button>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {tab === 'gateway-routes' && (
+                <>
+                  {!activeGatewayId ? (
+                    <div className="cl-gc-stub"><p>Create a gateway first, then add routes to running deployments.</p></div>
+                  ) : (
+                    <>
+                      <form className="cl-console-inline-form" onSubmit={handleCreateRoute}>
+                        <select value={routeForm.method} onChange={(e) => setRouteForm({ ...routeForm, method: e.target.value })}>
+                          {['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].map((m) => (
+                            <option key={m} value={m}>{m}</option>
+                          ))}
+                        </select>
+                        <input required placeholder="/v1/users" value={routeForm.path} onChange={(e) => setRouteForm({ ...routeForm, path: e.target.value })} />
+                        <select required value={routeForm.targetDeploymentId} onChange={(e) => setRouteForm({ ...routeForm, targetDeploymentId: e.target.value })}>
+                          <option value="">Target deployment</option>
+                          {runningDeployments.map((d) => (
+                            <option key={d.id} value={d.id}>{d.name}</option>
+                          ))}
+                        </select>
+                        <select value={routeForm.stage} onChange={(e) => setRouteForm({ ...routeForm, stage: e.target.value })}>
+                          <option value="prod">prod</option>
+                          <option value="dev">dev</option>
+                        </select>
+                        <button type="submit" className="gcp-btn-primary gcp-btn-compact" disabled={busy || !runningDeployments.length}>Add route</button>
+                      </form>
+                      <div className="gcp-table">
+                        <div className="gcp-table-row gcp-table-head cl-table-4">
+                          <span>Method</span><span>Path</span><span>Stage</span><span>Target</span>
+                        </div>
+                        {(gatewayRoutesData?.routes ?? []).map((r) => (
+                          <div key={r.id} className="gcp-table-row cl-table-4">
+                            <span className="gcp-service">{r.method}</span>
+                            <span>{r.path}</span>
+                            <span className="gcp-muted">{r.stage}</span>
+                            <span className="gcp-muted">{runningDeployments.find((d) => d.id === r.targetDeploymentId)?.name ?? r.targetDeploymentId}</span>
+                            <button type="button" className="cl-console-row-action" onClick={() => handleDeleteRoute(r.id)} disabled={busy}>Delete</button>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+
+              {tab === 'gateway-keys' && (
+                <>
+                  {!activeGatewayId ? (
+                    <div className="cl-gc-stub"><p>Create a gateway first, then issue consumer keys.</p></div>
+                  ) : (
+                    <>
+                      <div className="cl-console-actions">
+                        <button type="button" className="gcp-btn-primary gcp-btn-compact" onClick={handleCreateGatewayKey} disabled={busy}>Issue consumer key</button>
+                      </div>
+                      {newGatewayKey && (
+                        <div className="cl-key-reveal">
+                          <p>Copy this key now — it won&apos;t be shown again.</p>
+                          <code>{newGatewayKey}</code>
+                        </div>
+                      )}
+                      <div className="gcp-table">
+                        <div className="gcp-table-row gcp-table-head cl-table-4">
+                          <span>Name</span><span>Prefix</span><span>Rate limit</span><span>Last used</span>
+                        </div>
+                        {(gatewayKeysData?.keys ?? []).map((k) => (
+                          <div key={k.id} className="gcp-table-row cl-table-4">
+                            <span className="gcp-service">{k.name}</span>
+                            <span className="gcp-muted">{k.prefix}…</span>
+                            <span>{k.rateLimitRpm} rpm</span>
+                            <span className="gcp-muted">{k.lastUsedAt ? new Date(k.lastUsedAt).toLocaleString() : '—'}</span>
+                            <button type="button" className="cl-console-row-action" onClick={() => handleRevokeGatewayKey(k.id)} disabled={busy}>Revoke</button>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+
+              {tab === 'gateway-deploy' && (
+                <>
+                  {!activeGatewayId ? (
+                    <div className="cl-gc-stub"><p>Create a gateway to preview edge config.</p></div>
+                  ) : (
+                    <>
+                      <div className="cl-console-actions">
+                        <button
+                          type="button"
+                          className="gcp-btn-secondary gcp-btn-compact"
+                          onClick={() => navigator.clipboard.writeText(deployConfig)}
+                          disabled={!deployConfig}
+                        >
+                          Copy config
+                        </button>
+                      </div>
+                      <pre className="cl-gateway-config">{deployConfig || 'No routes configured yet.'}</pre>
+                    </>
+                  )}
+                </>
+              )}
+            </>
           )}
 
           {tab === 'storage' && (

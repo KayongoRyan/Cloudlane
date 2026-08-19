@@ -10,3 +10,4 @@ kubernetes>=29.0.0
 minio>=7.2.0
 mangum>=0.17.0
 python-dotenv>=1.0.0
+redis>=5.0.0

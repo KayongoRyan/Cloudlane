@@ -14,6 +14,7 @@ import {
 export type { ServiceId } from './consoleNavMenus'
 export {
   COMPUTE_VM_TABS,
+  GATEWAY_TABS,
   IAM_PROJECT_TABS,
   isAgentStubTab,
   isApisStubTab,
@@ -133,6 +134,17 @@ const PRODUCTS: NavItem[] = [
         <text x="12" y="15.5" textAnchor="middle" fontSize="8.5" fontWeight="700" fill="currentColor">
           API
         </text>
+      </Icon>
+    ),
+  },
+  {
+    id: 'gateway',
+    label: SERVICE_LABELS.gateway,
+    favoriteable: true,
+    chevron: true,
+    icon: (
+      <Icon>
+        <path d="M4 8h16M4 16h16M8 4v16M16 4v16" {...stroke} />
       </Icon>
     ),
   },
