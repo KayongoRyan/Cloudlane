@@ -20,24 +20,35 @@ cloudlane deploy --image myrepo/app:v1 --port 8080
 
 ## How it works
 
+Two front doors: **management plane** (dashboard/CLI → FastAPI) and **data plane** (tenant API consumers → Nginx gateway-proxy).
+
 ```
-Customer (CLI / dashboard)
+Dashboard / CLI / automation
         │
         ▼
-Control plane API  ──────────────►  MongoDB Atlas
-(FastAPI on Netlify)                ObjectId ERD (see below)
+Control plane API (:8001)  ──►  MongoDB (Atlas prod / compose local)
+  JWT + cl_* platform keys        tenants · projects · deployments
+  rate limit (Redis)              gateways · provision_jobs · …
+        │
+        ├── POST /api/deployments → 202 + provision_jobs queue
+        │         └── provision-worker → K8s (optional) → publicUrl
+        │
+        └── /api/gateways CRUD → nginx conf → gateway-proxy (:8080)
+                    │
+                    └── gw_* keys · auth_request · proxy to deployment
+
+Tenant API clients
         │
         ▼
-Kubernetes (EKS, planned)
-  ├─ one namespace per tenant
-  ├─ scale 0 → N on traffic
-  └─ publicUrl per deployment (*.cloudlane.run)
+gateway-proxy (Nginx :8080)  ──►  deployment.publicUrl (*.cloudlane.run)
         │
         ▼
 IremboPay (metered billing — tenants.irembopayCustomerId reserved)
 ```
 
-Customers never see Kubernetes — one `deploy` command, same as Cloud Run hiding GKE.
+Customers never see Kubernetes — one `deploy` command, same as Cloud Run hiding GKE. Deploy is **async**: API enqueues a job; `provision-worker` provisions and updates status.
+
+Full architecture: [docs/architecture.md](docs/architecture.md).
 
 ## Data model
 
@@ -45,18 +56,28 @@ Native `_id: ObjectId`. FKs are ObjectIds; JSON/JWT use hex strings. Legacy UUID
 
 ```
 tenants 1──has──* users
+        1──owns──* projects
         1──owns──* deployments
         1──creates──* api_keys
-users   1──triggers──* audit_logs
+        1──owns──* gateways
+projects 1──groups──* deployments · gateways · buckets
+gateways 1──has──* gateway_routes · gateway_keys
 deployments 1──produces──* usage_metrics
+users   1──triggers──* audit_logs
 ```
 
 | Collection | Fields |
 |---|---|
 | `tenants` | slug, name, status, tier, limits, irembopayCustomerId, createdAt |
 | `users` | tenantId, email, passwordHash, role, status, createdAt |
-| `deployments` | tenantId, name, slug, image, cpu, memory, min/maxInstances, status, publicUrl, k8sNamespace, deletedAt, createdAt |
+| `projects` | tenantId, name, slug, status, createdAt |
+| `deployments` | tenantId, projectId, name, slug, image, cpu, memory, min/maxInstances, status, statusMessage, publicUrl, k8sNamespace, deletedAt, createdAt |
+| `provision_jobs` | tenantId, deploymentId, status, attempts, lastError, createdAt |
+| `gateways` | tenantId, projectId, name, slug, hostname, status, createdAt |
+| `gateway_routes` | gatewayId, path, method, deploymentId, createdAt |
+| `gateway_keys` | gatewayId, name, keyHash, prefix, status, createdAt |
 | `api_keys` | tenantId, userId, name, keyHash, prefix, scopes, expiresAt, lastUsedAt |
+| `buckets` | tenantId, projectId, name, createdAt |
 | `audit_logs` | tenantId, userId, action, resourceType, resourceId, changes, ipAddress, createdAt |
 | `usage_metrics` | tenantId, deploymentId, metricType, value, windowStart, windowEnd |
 
@@ -64,17 +85,23 @@ Queries are always scoped by `tenantId`.
 
 ## API
 
-Bearer JWT or `X-API-Key`.
+Bearer JWT or `X-API-Key` (`cl_*` platform keys). Gateway consumer keys (`gw_*`) are validated at the edge only.
 
 | Method | Path | Auth |
 |---|---|---|
 | `POST` | `/api/auth/register` | public |
 | `POST` | `/api/auth/login` | public |
+| `GET/POST` | `/api/projects` | JWT / API key |
 | `GET/POST` | `/api/deployments` | JWT / API key |
+| `POST` | `/api/deployments` | returns **202** + job id (async provision) |
+| `GET/POST` | `/api/gateways` (+ routes, keys) | JWT / API key (`gateway:*` scopes) |
+| `GET/POST` | `/api/buckets` | JWT / API key |
 | `GET/POST` | `/api/api-keys` | JWT / API key |
 | `DELETE` | `/api/api-keys/:id` | JWT / API key |
 | `GET` | `/api/audit-logs` | JWT / API key |
 | `GET/POST` | `/api/usage-metrics` | JWT / API key |
+| `GET` | `/api/billing`, `/api/monitoring` | JWT / API key |
+| `GET` | `/internal/gateway/validate` | Nginx `auth_request` (edge) |
 | `GET` | `/health` | public (no DB) |
 
 `POST /api/api-keys` returns the plaintext key **once**. Register and deploy write `audit_logs`.
@@ -304,25 +331,25 @@ Rust       ──► performance · security · storage · net
 | Layer | Choice |
 |---|---|
 | API | Python FastAPI (+ Mangum on Netlify) |
+| Async provision | `worker.py` + `provision_jobs` (compose `provision-worker`) |
+| Customer API edge | Nginx `gateway-proxy` + Redis rate limits |
 | Dashboard / CLI / SDK | TypeScript (Next.js 14, Commander.js) |
 | Control-plane DB | MongoDB (Atlas in prod, `docker compose` locally) |
-| Auth | JWT + hashed API keys |
+| Auth | JWT + platform keys (`cl_*`) + gateway keys (`gw_*`) |
 | Billing | IremboPay (customer id reserved; charges not wired) |
 
 ```
-[Client: Next.js / CLI / SDK]
-        │
-        ▼
-   Nginx (reverse proxy)
-        │
-        ▼
-   Go / Python backends ── Redis · NATS · RabbitMQ
-        │
+[Client: Next.js / CLI / SDK]              [Tenant API clients]
+        │                                           │
+        ▼                                           ▼
+   FastAPI :8001                            gateway-proxy :8080
+        │                                           │
+        ├── Redis (rate limits)                     ├── auth_request → FastAPI
+        ├── provision-worker → K8s (optional)       └── proxy → deployment.publicUrl
         ├── MinIO (object storage)
-        ├── Kubernetes (Docker workloads)
-        └── Prometheus · Grafana · Loki
+        └── Prometheus · Grafana
                 ▲
-         Ubuntu Server + Terraform
+         docker compose locally · Terraform (planned)
 ```
 
 ## Repo
@@ -330,14 +357,19 @@ Rust       ──► performance · security · storage · net
 ```
 cloudlane/
 ├── apps/
-│   ├── api_python/   # Python FastAPI control plane (Netlify)
-│   ├── api/          # legacy Node API (deprecated)
-│   └── dashboard/    # TypeScript Next.js dashboard (Vercel)
+│   ├── api_python/      # FastAPI control plane + worker.py
+│   ├── api/             # legacy Node API (deprecated)
+│   └── dashboard/       # Next.js dashboard (Vercel)
 ├── packages/
-│   ├── cli/          # TypeScript `cloudlane` CLI
-│   └── shared/       # Shared TypeScript types
-├── docs/DEPLOYMENT.md
-├── docker-compose.yml   # local Mongo
+│   ├── cli/             # `cloudlane` CLI
+│   └── shared/          # Shared TypeScript types
+├── infra/
+│   ├── nginx/           # gateway-proxy base + gateways/*.conf
+│   └── prometheus/
+├── docs/
+│   ├── architecture.md  # dual-gateway model, layers, status
+│   └── DEPLOYMENT.md
+├── docker-compose.yml   # mongo, minio, redis, gateway-proxy, worker, …
 └── README.md
 ```
 
@@ -345,21 +377,47 @@ Planned: Go operators / Terraform, Rust storage & networking crates, C system pr
 
 ## Local
 
-Python 3.11+, Node 20+ (dashboard), Docker, `apps/api_python/.env` (copy from `.env.example`):
+Python 3.11+, Node 20+, Docker.
+
+1. Copy env files:
+   - Root `.env` → `MONGO_PASSWORD` (used by compose)
+   - `apps/api_python/.env` from `apps/api_python/.env.example`
+
+2. Match credentials — compose creates Mongo user `cloudlane` with `MONGO_PASSWORD`. URL-encode special chars in `DATABASE_URL` (`#` → `%23`):
 
 ```
-DATABASE_URL=mongodb://localhost:27017/cloudlane
+DATABASE_URL=mongodb://cloudlane:<password>@localhost:27017/cloudlane?authSource=admin
 JWT_SECRET=<long random string>
+REDIS_URL=redis://localhost:6380/0
+MINIO_ENDPOINT=localhost:9010
 ```
 
-If compose auth is on, set root `.env` `MONGO_PASSWORD` and point `DATABASE_URL` at that user. **Never commit Atlas URIs** — GitHub secret scanning flags `mongodb+srv` with credentials, even placeholders.
+**Never commit Atlas URIs** — GitHub secret scanning flags `mongodb+srv` with credentials.
 
 ```bash
-docker compose up -d
-cd apps/api_python && pip install -r requirements.txt
+docker compose up -d          # mongo, minio, redis, prometheus, grafana, gateway-proxy, provision-worker
 npm install
-npm run dev                 # API :8001 + dashboard :3000
+cd apps/api_python && pip install -r requirements.txt
+npm run dev                   # API :8001 + dashboard :3000 (uses python -m uvicorn)
 ```
+
+| Service | Port |
+|---|---|
+| FastAPI | 8001 |
+| Dashboard | 3000 |
+| gateway-proxy | 8080 |
+| MongoDB | 27017 |
+| Redis | 6380 |
+| MinIO API / console | 9010 / 9011 |
+| Prometheus / Grafana | 9090 / 3002 |
+
+Run the worker separately (or rely on compose `provision-worker`):
+
+```bash
+cd apps/api_python && python worker.py
+```
+
+Optional: set `KUBECONFIG` for real K8s provisioning; without it deployments stay `pending`.
 
 Dashboard on localhost hits `:8001`; production hits the Netlify API.
 
@@ -389,10 +447,13 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 - [x] Usage metering (`compute_seconds`) + billing/invoices + IremboPay sandbox
 - [x] Monitoring summary + usage charts in console; Prometheus/Grafana in compose
 - [x] VM lifecycle API (stub IP; hypervisor deferred)
+- [x] **API Gateway** — CRUD, Nginx edge (`gateway-proxy`), `gw_*` keys, Redis rate limits
+- [x] **Async deploy orchestrator** — `provision_jobs`, worker, `POST /api/deployments` → 202
 - [ ] Scale-to-zero (KEDA)
 - [ ] IremboPay production charges
 
 ### Phase 2 — Polish
+- Quota service (CPU/memory/instances, not just deploy count)
 - Audit log viewer, quotas UI from `tenants.limits`, alerting, Loki
 
 ### Phase 3 — Broader surface
@@ -407,4 +468,4 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 
 ## Status
 
-V1 control-plane surfaces implemented in **FastAPI** + **Next dashboard console**. Local stack: `docker compose up` (Mongo, MinIO, Prometheus, Grafana). Point Netlify base dir to `apps/api_python` and redeploy.
+V1 control plane in **FastAPI** + **Next.js console**. **API Gateway** (Nginx edge on `:8080`) and **async provisioning** (worker + `provision_jobs`) are live locally. Local stack: `docker compose up` (Mongo, MinIO, Redis, Prometheus, Grafana, gateway-proxy, provision-worker). Next up: quota enforcement, then provider driver interface — see [docs/architecture.md](docs/architecture.md).
