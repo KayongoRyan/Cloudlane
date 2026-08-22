@@ -20,6 +20,10 @@ from routes.vms import router as vms_router
 from routes.gateways import router as gateways_router
 from routes.gateway_internal import router as gateway_internal_router
 from routes.quota import router as quota_router
+from routes.secrets import router as secrets_router
+from routes.load_balancers import router as load_balancers_router
+from routes.databases import router as databases_router
+from routes.graphql import router as graphql_router
 from middleware.control_plane_gateway import (
     ApiVersionMiddleware,
     ControlPlaneRateLimitMiddleware,
@@ -72,6 +76,10 @@ app.include_router(monitoring_router, prefix='/api/monitoring', tags=['monitorin
 app.include_router(vms_router, prefix='/api/vms', tags=['vms'])
 app.include_router(gateways_router, prefix='/api/gateways', tags=['gateways'])
 app.include_router(quota_router, prefix='/api/quota', tags=['quota'])
+app.include_router(secrets_router, prefix='/api/secrets', tags=['secrets'])
+app.include_router(load_balancers_router, prefix='/api/load-balancers', tags=['load-balancers'])
+app.include_router(databases_router, prefix='/api/databases', tags=['databases'])
+app.include_router(graphql_router, prefix='/graphql', tags=['graphql'])
 app.include_router(gateway_internal_router, prefix='/internal/gateway', tags=['gateway-internal'])
 app.include_router(audit_logs_router, prefix='/api/audit-logs', tags=['audit-logs'])
 app.include_router(usage_metrics_router, prefix='/api/usage-metrics', tags=['usage-metrics'])

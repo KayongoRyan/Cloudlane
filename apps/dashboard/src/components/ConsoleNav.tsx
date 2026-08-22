@@ -15,6 +15,9 @@ export type { ServiceId } from './consoleNavMenus'
 export {
   COMPUTE_VM_TABS,
   GATEWAY_TABS,
+  LB_TABS,
+  SECRET_TABS,
+  SQL_INSTANCE_TABS,
   IAM_PROJECT_TABS,
   isAgentStubTab,
   isApisStubTab,
@@ -145,6 +148,18 @@ const PRODUCTS: NavItem[] = [
     icon: (
       <Icon>
         <path d="M4 8h16M4 16h16M8 4v16M16 4v16" {...stroke} />
+      </Icon>
+    ),
+  },
+  {
+    id: 'lb',
+    label: SERVICE_LABELS.lb,
+    favoriteable: true,
+    chevron: true,
+    icon: (
+      <Icon>
+        <path d="M12 4v4M8 12h8M6 16h12M12 20v-4" {...stroke} />
+        <circle cx="12" cy="12" r="2.2" {...stroke} />
       </Icon>
     ),
   },

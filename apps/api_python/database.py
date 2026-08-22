@@ -18,6 +18,9 @@ DEFAULT_TENANT_LIMITS = {
     'maxMemoryMb': 4096,
     'maxInstances': 3,
     'maxBuckets': 5,
+    'maxSecrets': 50,
+    'maxLoadBalancers': 5,
+    'maxDatabaseInstances': 3,
 }
 
 _client: MongoClient | None = None
@@ -85,6 +88,12 @@ def map_limits(raw: Any) -> dict[str, int]:
         'maxMemoryMb': data.get('maxMemoryMb', DEFAULT_TENANT_LIMITS['maxMemoryMb']),
         'maxInstances': data.get('maxInstances', DEFAULT_TENANT_LIMITS['maxInstances']),
         'maxBuckets': data.get('maxBuckets', DEFAULT_TENANT_LIMITS['maxBuckets']),
+        'maxSecrets': data.get('maxSecrets', DEFAULT_TENANT_LIMITS['maxSecrets']),
+        'maxLoadBalancers': data.get('maxLoadBalancers', DEFAULT_TENANT_LIMITS['maxLoadBalancers']),
+        'maxDatabaseInstances': data.get(
+            'maxDatabaseInstances',
+            DEFAULT_TENANT_LIMITS['maxDatabaseInstances'],
+        ),
     }
 
 
@@ -187,6 +196,63 @@ def map_vm(doc: dict[str, Any]) -> dict[str, Any]:
         'publicIp': doc.get('publicIp'),
         'createdAt': doc.get('createdAt'),
     }
+
+
+def map_secret(doc: dict[str, Any], *, include_value: bool = False) -> dict[str, Any]:
+    out = {
+        'id': ref_str(doc['_id']),
+        'tenantId': ref_str(doc['tenantId']),
+        'projectId': ref_str(doc['projectId']) if doc.get('projectId') else None,
+        'name': doc['name'],
+        'version': doc.get('version', 1),
+        'createdAt': doc.get('createdAt'),
+        'updatedAt': doc.get('updatedAt'),
+    }
+    if include_value and doc.get('ciphertext'):
+        from services.secrets_crypto import decrypt_secret
+        out['value'] = decrypt_secret(doc['ciphertext'])
+    return out
+
+
+def map_load_balancer(doc: dict[str, Any]) -> dict[str, Any]:
+    return {
+        'id': ref_str(doc['_id']),
+        'tenantId': ref_str(doc['tenantId']),
+        'projectId': ref_str(doc['projectId']) if doc.get('projectId') else None,
+        'name': doc['name'],
+        'scheme': doc.get('scheme', 'internet-facing'),
+        'protocol': doc.get('protocol', 'HTTP'),
+        'port': doc.get('port', 80),
+        'dnsName': doc.get('dnsName'),
+        'targetDeploymentId': ref_str(doc['targetDeploymentId']) if doc.get('targetDeploymentId') else None,
+        'status': doc.get('status', 'active'),
+        'statusMessage': doc.get('statusMessage'),
+        'createdAt': doc.get('createdAt'),
+        'updatedAt': doc.get('updatedAt'),
+    }
+
+
+def map_database_instance(doc: dict[str, Any], *, include_connection: bool = False) -> dict[str, Any]:
+    out = {
+        'id': ref_str(doc['_id']),
+        'tenantId': ref_str(doc['tenantId']),
+        'projectId': ref_str(doc['projectId']) if doc.get('projectId') else None,
+        'name': doc['name'],
+        'engine': doc.get('engine', 'postgres'),
+        'version': doc.get('version', '16'),
+        'sizeGb': doc.get('sizeGb', 10),
+        'host': doc.get('host'),
+        'port': doc.get('port'),
+        'endpoint': doc.get('endpoint'),
+        'username': doc.get('username'),
+        'status': doc.get('status', 'available'),
+        'statusMessage': doc.get('statusMessage'),
+        'createdAt': doc.get('createdAt'),
+        'updatedAt': doc.get('updatedAt'),
+    }
+    if include_connection:
+        out['connectionString'] = doc.get('connectionString')
+    return out
 
 
 def map_api_key(doc: dict[str, Any]) -> dict[str, Any]:
@@ -347,6 +413,9 @@ def ensure_indexes() -> None:
     col('buckets').create_index([('tenantId', 1), ('name', 1)], unique=True)
     col('invoices').create_index([('tenantId', 1), ('createdAt', -1)])
     col('vms').create_index([('tenantId', 1), ('name', 1)])
+    col('secrets').create_index([('tenantId', 1), ('name', 1)], unique=True)
+    col('load_balancers').create_index([('tenantId', 1), ('name', 1)], unique=True)
+    col('database_instances').create_index([('tenantId', 1), ('name', 1)], unique=True)
     col('gateways').create_index([('tenantId', 1), ('slug', 1)], unique=True)
     col('gateways').create_index('tenantId')
     col('gateways').create_index('projectId')
@@ -489,6 +558,18 @@ def count_buckets(tenant_id: str) -> int:
     return col('buckets').count_documents(tenant_clause(tenant_id))
 
 
+def count_secrets(tenant_id: str) -> int:
+    return col('secrets').count_documents(tenant_clause(tenant_id))
+
+
+def count_load_balancers(tenant_id: str) -> int:
+    return col('load_balancers').count_documents(tenant_clause(tenant_id))
+
+
+def count_database_instances(tenant_id: str) -> int:
+    return col('database_instances').count_documents(tenant_clause(tenant_id))
+
+
 def summarize_tenant_usage(tenant_id: str) -> dict[str, int | float]:
     deployments = list_deployments(tenant_id)
     total_cpu = 0.0
@@ -505,6 +586,9 @@ def summarize_tenant_usage(tenant_id: str) -> dict[str, int | float]:
         'totalMemoryMb': total_memory,
         'totalMaxInstances': total_max_instances,
         'buckets': count_buckets(tenant_id),
+        'secrets': count_secrets(tenant_id),
+        'loadBalancers': count_load_balancers(tenant_id),
+        'databaseInstances': count_database_instances(tenant_id),
     }
 
 
@@ -1034,3 +1118,180 @@ def requeue_provision_job(job_id: str, error: str) -> dict[str, Any] | None:
     )
     return map_provision_job(doc) if doc else None
 
+
+
+def list_secrets(tenant_id: str, project_id: str | None = None) -> list[dict[str, Any]]:
+    filt: dict[str, Any] = {**tenant_clause(tenant_id)}
+    if project_id:
+        filt['projectId'] = oid_or_raw(project_id)
+    docs = col('secrets').find(filt).sort('createdAt', -1)
+    return [map_secret(doc) for doc in docs]
+
+
+def find_secret_by_id(secret_id: str, tenant_id: str, *, include_value: bool = False) -> dict[str, Any] | None:
+    if not is_object_id_string(secret_id):
+        return None
+    doc = col('secrets').find_one({'_id': as_object_id(secret_id), **tenant_clause(tenant_id)})
+    return map_secret(doc, include_value=include_value) if doc else None
+
+
+def find_secret_by_name(name: str, tenant_id: str) -> dict[str, Any] | None:
+    doc = col('secrets').find_one({'name': name, **tenant_clause(tenant_id)})
+    return map_secret(doc) if doc else None
+
+
+def create_secret(input_data: dict[str, Any]) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    doc = {
+        'tenantId': oid_or_raw(input_data['tenantId']),
+        'projectId': oid_or_raw(input_data['projectId']) if input_data.get('projectId') else None,
+        'name': input_data['name'],
+        'ciphertext': input_data['ciphertext'],
+        'version': 1,
+        'createdAt': now,
+        'updatedAt': now,
+    }
+    result = col('secrets').insert_one(doc)
+    doc['_id'] = result.inserted_id
+    return map_secret(doc)
+
+
+def update_secret_value(secret_id: str, tenant_id: str, ciphertext: str) -> dict[str, Any] | None:
+    if not is_object_id_string(secret_id):
+        return None
+    doc = col('secrets').find_one_and_update(
+        {'_id': as_object_id(secret_id), **tenant_clause(tenant_id)},
+        {
+            '$set': {'ciphertext': ciphertext, 'updatedAt': datetime.now(timezone.utc)},
+            '$inc': {'version': 1},
+        },
+        return_document=ReturnDocument.AFTER,
+    )
+    return map_secret(doc) if doc else None
+
+
+def delete_secret(secret_id: str, tenant_id: str) -> bool:
+    if not is_object_id_string(secret_id):
+        return False
+    result = col('secrets').delete_one({'_id': as_object_id(secret_id), **tenant_clause(tenant_id)})
+    return result.deleted_count == 1
+
+
+def list_load_balancers(tenant_id: str, project_id: str | None = None) -> list[dict[str, Any]]:
+    filt: dict[str, Any] = {**tenant_clause(tenant_id)}
+    if project_id:
+        filt['projectId'] = oid_or_raw(project_id)
+    docs = col('load_balancers').find(filt).sort('createdAt', -1)
+    return [map_load_balancer(doc) for doc in docs]
+
+
+def find_load_balancer_by_id(lb_id: str, tenant_id: str) -> dict[str, Any] | None:
+    if not is_object_id_string(lb_id):
+        return None
+    doc = col('load_balancers').find_one({'_id': as_object_id(lb_id), **tenant_clause(tenant_id)})
+    return map_load_balancer(doc) if doc else None
+
+
+def create_load_balancer(input_data: dict[str, Any]) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    doc = {
+        'tenantId': oid_or_raw(input_data['tenantId']),
+        'projectId': oid_or_raw(input_data['projectId']) if input_data.get('projectId') else None,
+        'name': input_data['name'],
+        'scheme': input_data.get('scheme', 'internet-facing'),
+        'protocol': input_data.get('protocol', 'HTTP'),
+        'port': input_data.get('port', 80),
+        'dnsName': input_data.get('dnsName'),
+        'targetDeploymentId': oid_or_raw(input_data['targetDeploymentId']) if input_data.get('targetDeploymentId') else None,
+        'status': input_data.get('status', 'active'),
+        'statusMessage': input_data.get('statusMessage'),
+        'createdAt': now,
+        'updatedAt': now,
+    }
+    result = col('load_balancers').insert_one(doc)
+    doc['_id'] = result.inserted_id
+    return map_load_balancer(doc)
+
+
+def update_load_balancer(lb_id: str, tenant_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    if not is_object_id_string(lb_id):
+        return None
+    payload = {**updates, 'updatedAt': datetime.now(timezone.utc)}
+    if 'targetDeploymentId' in payload and payload['targetDeploymentId']:
+        payload['targetDeploymentId'] = oid_or_raw(payload['targetDeploymentId'])
+    doc = col('load_balancers').find_one_and_update(
+        {'_id': as_object_id(lb_id), **tenant_clause(tenant_id)},
+        {'$set': payload},
+        return_document=ReturnDocument.AFTER,
+    )
+    return map_load_balancer(doc) if doc else None
+
+
+def delete_load_balancer(lb_id: str, tenant_id: str) -> bool:
+    if not is_object_id_string(lb_id):
+        return False
+    result = col('load_balancers').delete_one({'_id': as_object_id(lb_id), **tenant_clause(tenant_id)})
+    return result.deleted_count == 1
+
+
+def list_database_instances(tenant_id: str, project_id: str | None = None) -> list[dict[str, Any]]:
+    filt: dict[str, Any] = {**tenant_clause(tenant_id)}
+    if project_id:
+        filt['projectId'] = oid_or_raw(project_id)
+    docs = col('database_instances').find(filt).sort('createdAt', -1)
+    return [map_database_instance(doc) for doc in docs]
+
+
+def find_database_instance_by_id(
+    instance_id: str,
+    tenant_id: str,
+    *,
+    include_connection: bool = False,
+) -> dict[str, Any] | None:
+    if not is_object_id_string(instance_id):
+        return None
+    doc = col('database_instances').find_one({'_id': as_object_id(instance_id), **tenant_clause(tenant_id)})
+    return map_database_instance(doc, include_connection=include_connection) if doc else None
+
+
+def create_database_instance(input_data: dict[str, Any]) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    doc = {
+        'tenantId': oid_or_raw(input_data['tenantId']),
+        'projectId': oid_or_raw(input_data['projectId']) if input_data.get('projectId') else None,
+        'name': input_data['name'],
+        'engine': input_data.get('engine', 'postgres'),
+        'version': input_data.get('version', '16'),
+        'sizeGb': input_data.get('sizeGb', 10),
+        'host': input_data.get('host'),
+        'port': input_data.get('port'),
+        'endpoint': input_data.get('endpoint'),
+        'username': input_data.get('username'),
+        'connectionString': input_data.get('connectionString'),
+        'status': input_data.get('status', 'available'),
+        'statusMessage': input_data.get('statusMessage'),
+        'createdAt': now,
+        'updatedAt': now,
+    }
+    result = col('database_instances').insert_one(doc)
+    doc['_id'] = result.inserted_id
+    return map_database_instance(doc, include_connection=True)
+
+
+def update_database_instance(instance_id: str, tenant_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    if not is_object_id_string(instance_id):
+        return None
+    payload = {**updates, 'updatedAt': datetime.now(timezone.utc)}
+    doc = col('database_instances').find_one_and_update(
+        {'_id': as_object_id(instance_id), **tenant_clause(tenant_id)},
+        {'$set': payload},
+        return_document=ReturnDocument.AFTER,
+    )
+    return map_database_instance(doc) if doc else None
+
+
+def delete_database_instance(instance_id: str, tenant_id: str) -> bool:
+    if not is_object_id_string(instance_id):
+        return False
+    result = col('database_instances').delete_one({'_id': as_object_id(instance_id), **tenant_clause(tenant_id)})
+    return result.deleted_count == 1

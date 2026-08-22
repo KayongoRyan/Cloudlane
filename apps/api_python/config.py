@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     gateway_default_rate_limit_rpm: int = 1000
     worker_poll_interval_seconds: int = 2
     provision_max_attempts: int = 3
+    secrets_master_key: str = ''
 
     @property
     def is_netlify(self) -> bool:

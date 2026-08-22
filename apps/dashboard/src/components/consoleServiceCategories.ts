@@ -334,6 +334,7 @@ export const CONSOLE_SERVICE_CATEGORIES: ServiceCategory[] = [
       {
         name: 'Cloudlane AppSync',
         description: 'Real-time data sync using GraphQL for mobile and web apps, online or offline',
+        consoleId: 'apis',
       },
       {
         name: 'Device Farm',
@@ -744,6 +745,11 @@ export const CONSOLE_SERVICE_CATEGORIES: ServiceCategory[] = [
         consoleId: 'gateway',
       },
       {
+        name: 'Elastic Load Balancing',
+        description: 'Distribute incoming traffic across targets',
+        consoleId: 'lb-load-balancers',
+      },
+      {
         name: 'Cloudlane App Mesh',
         description: 'Easily monitor and control microservices',
       },
@@ -888,6 +894,7 @@ export const CONSOLE_SERVICE_CATEGORIES: ServiceCategory[] = [
       {
         name: 'Secrets Manager',
         description: 'Easily rotate, manage, and retrieve secrets throughout their lifecycle',
+        consoleId: 'sec-secret-manager',
       },
       {
         name: 'Cloudlane Security Agent',

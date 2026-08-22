@@ -117,7 +117,10 @@ Replace a single “customer-facing API” box with two distinct entry points:
 | Deployments | `/api/deployments` | `routes/deployments.py` | Live |
 | Projects | `/api/projects` | `routes/projects.py` | Live |
 | Object storage | `/api/buckets` | `routes/buckets.py` | Live |
-| Quota | `/api/quota` | `routes/quota.py` | Live |
+| GraphQL | `/graphql` | `routes/graphql.py` | Live (read subset) |
+| Secrets | `/api/secrets` | `routes/secrets.py` | Live |
+| Load balancers | `/api/load-balancers` | `routes/load_balancers.py` | Live (stub provider) |
+| Managed DBs | `/api/databases` | `routes/databases.py` | Live (stub provider) |
 | VMs | `/api/vms` | `routes/vms.py` | Stub |
 | API Gateway admin | `/api/gateways` | `routes/gateways.py` | Live |
 | Usage metrics | `/api/usage-metrics` | `routes/usage_metrics.py` | Live |
@@ -204,9 +207,12 @@ Platform keys default to `deploy`, `read`. Gateway admin accepts `gateway:read` 
 |---|---|---|
 | S3 / object storage | `services/providers/minio.py` → `minio_client.py` | MinIO `:9010`, console `:9011` |
 | Kubernetes | `services/providers/k8s.py` → `kubernetes.py` | Optional; set `KUBECONFIG` |
+| Secret vault | `services/providers/secrets.py` (Fernet) | Encrypted in Mongo `secrets` |
+| Load balancer | `services/providers/load_balancer.py` | Metadata stub; DNS `*.lb.cloudlane.run` |
+| Managed DB | `services/providers/database.py` | Metadata stub; `*.db.cloudlane.run` |
 | VMs (EC2-style) | `routes/vms.py` | Stub only |
-| RDS / managed DB | Console stubs | Not built |
-| Load balancer | Nginx `gateway-proxy` | Customer API traffic only |
+| RDS / managed DB | Console `sql-instances` + `/api/databases` | Stub provider |
+| Load balancer | Console Load Balancing + `/api/load-balancers` | Stub provider |
 | Deployment ingress | K8s ingress via compute provider | When cluster connected |
 
 **Local infra:** `docker-compose.yml` — mongo, minio, redis, prometheus, grafana, gateway-proxy.
@@ -232,6 +238,9 @@ Host ports `6380` / `9010` avoid conflicts when another Redis or MinIO already o
 | `projects` | Resource grouping |
 | `deployments` | Cloud Run-style apps (`publicUrl`, status, K8s refs) |
 | `gateways`, `gateway_routes`, `gateway_keys` | API Gateway product |
+| `secrets` | Encrypted tenant secrets (Secret Manager) |
+| `load_balancers` | General LB product (metadata) |
+| `database_instances` | Managed DB product (metadata stub) |
 | `api_keys` | Platform keys for dashboard / CLI (`cl_*`) |
 | `buckets` | Object storage metadata |
 | `vms` | VM metadata (stub) |
@@ -252,13 +261,16 @@ Host ports `6380` / `9010` avoid conflicts when another Redis or MinIO already o
 | Usage / Bills | Metrics + basic billing |
 | Terraform / IaC | Missing |
 | Async job queue | Mongo `provision_jobs` + `provision-worker` container |
-| Quota manager | Live — CPU/memory at max scale, deploy count, buckets; console Hub Quotas |
+| Quota manager | Live — CPU/memory at max scale, deploy count, buckets/secrets/LBs/DBs; console Hub Quotas |
 | Rate limiter | Redis on control plane + gateway edge |
-| Provider drivers | `services/providers` — K8s compute + MinIO storage |
+| Provider drivers | `services/providers` — K8s, MinIO, secrets, LB stub, DB stub |
 | EC2 / VMs | API stub |
 | K8s | Real when cluster configured |
 | S3 | MinIO |
-| Load balancer | Gateway proxy only (not general LB product) |
+| Load balancer | Product API + console (stub data-plane); API Gateway remains for tenant APIs |
+| Secret vaults | Live — Fernet-encrypted tenant secrets |
+| RDS | Metadata API + console (stub) |
+| GraphQL | Live thin read API at `/graphql` |
 
 ---
 
@@ -267,9 +279,18 @@ Host ports `6380` / `9010` avoid conflicts when another Redis or MinIO already o
 1. ~~**Async orchestrator**~~ — done (`provision_jobs` + worker; deploy returns 202)
 2. ~~**Quota service**~~ — done (`services/quota.py`, `/api/quota`, console Hub Quotas)
 3. ~~**Provider driver interface**~~ — done (`services/providers/` for compute + object storage)
-4. **General load balancer product** — separate from API Gateway if L4/L7 for VMs/K8s is needed.
-5. **RDS / GraphQL** — after Layer 2 is solid.
-6. **Secret Vaults** — move JWT/DB/MinIO creds off flat `.env` (diagram Data Layer).
+4. ~~**General load balancer product**~~ — done (`/api/load-balancers`, console Load Balancing; stub data-plane)
+5. ~~**RDS / GraphQL**~~ — done (`/api/databases` stub + `/graphql` read API)
+6. ~~**Secret Vaults**~~ — done (`/api/secrets`, Fernet at rest via `SECRETS_MASTER_KEY` / `JWT_SECRET`)
+
+### Still open
+
+- Real LB data-plane (nginx/L4 beyond API Gateway)
+- Real managed Postgres/MySQL (beyond metadata stub)
+- Full GraphQL schema (current `/graphql` is a thin query selector)
+- Scale-to-zero (KEDA)
+- IremboPay production charges
+- Move control-plane env secrets (JWT/DB/MinIO) into the vault product for ops
 
 ---
 

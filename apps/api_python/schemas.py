@@ -94,3 +94,42 @@ class GatewayKeyCreate(BaseModel):
     name: str | None = None
     scopes: list[str] | None = None
     rateLimitRpm: int = Field(default=1000, ge=1, le=100000)
+
+
+class SecretCreate(BaseModel):
+    name: str = Field(..., min_length=2, max_length=128)
+    value: str = Field(..., min_length=1, max_length=65536)
+    projectId: str | None = None
+
+
+class SecretUpdate(BaseModel):
+    value: str = Field(..., min_length=1, max_length=65536)
+
+
+class LoadBalancerCreate(BaseModel):
+    name: str = Field(..., min_length=2)
+    scheme: str = Field(default='internet-facing', pattern='^(internet-facing|internal)$')
+    protocol: str = Field(default='HTTP', pattern='^(HTTP|HTTPS|TCP)$')
+    port: int = Field(default=80, ge=1, le=65535)
+    targetDeploymentId: str | None = None
+    projectId: str | None = None
+
+
+class LoadBalancerUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=2)
+    status: str | None = Field(default=None, pattern='^(active|disabled)$')
+    targetDeploymentId: str | None = None
+    port: int | None = Field(default=None, ge=1, le=65535)
+
+
+class DatabaseInstanceCreate(BaseModel):
+    name: str = Field(..., min_length=2)
+    engine: str = Field(default='postgres', pattern='^(postgres|mysql)$')
+    version: str = Field(default='16')
+    sizeGb: int = Field(default=10, ge=5, le=1024)
+    projectId: str | None = None
+
+
+class DatabaseInstanceUpdate(BaseModel):
+    status: str | None = Field(default=None, pattern='^(available|stopped|provisioning|failed)$')
+    sizeGb: int | None = Field(default=None, ge=5, le=1024)

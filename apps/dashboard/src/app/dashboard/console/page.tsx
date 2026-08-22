@@ -10,6 +10,9 @@ import { useConsoleShell } from '../../../lib/useConsoleShell'
 import ConsoleNav, {
   COMPUTE_VM_TABS,
   GATEWAY_TABS,
+  LB_TABS,
+  SECRET_TABS,
+  SQL_INSTANCE_TABS,
   IAM_PROJECT_TABS,
   isOverviewTab,
   isProductStubTab,
@@ -95,6 +98,38 @@ interface GatewayKeyRow {
   lastUsedAt?: string
 }
 
+interface SecretRow {
+  id: string
+  name: string
+  version: number
+  createdAt?: string
+  value?: string
+}
+
+interface LoadBalancerRow {
+  id: string
+  name: string
+  scheme: string
+  protocol: string
+  port: number
+  dnsName?: string
+  status: string
+  statusMessage?: string
+  targetDeploymentId?: string
+}
+
+interface DatabaseInstanceRow {
+  id: string
+  name: string
+  engine: string
+  version: string
+  sizeGb: number
+  endpoint?: string
+  status: string
+  statusMessage?: string
+  connectionString?: string
+}
+
 interface Invoice {
   id: string
   totalAmount: number
@@ -116,6 +151,9 @@ interface QuotaReport {
     maxMemoryMb: number
     maxInstances: number
     maxBuckets: number
+    maxSecrets: number
+    maxLoadBalancers: number
+    maxDatabaseInstances: number
   }
   usage: {
     deployments: number
@@ -123,12 +161,18 @@ interface QuotaReport {
     totalMemoryMb: number
     totalMaxInstances: number
     buckets: number
+    secrets: number
+    loadBalancers: number
+    databaseInstances: number
   }
   available: {
     deployments: number
     cpu: number
     memoryMb: number
     buckets: number
+    secrets: number
+    loadBalancers: number
+    databaseInstances: number
     maxInstancesPerDeployment?: number
   }
 }
@@ -190,6 +234,11 @@ export default function ConsolePage() {
   const [projectName, setProjectName] = useState('')
   const [bucketName, setBucketName] = useState('')
   const [vmForm, setVmForm] = useState({ name: '', cpu: 1, memoryMb: 512 })
+  const [secretForm, setSecretForm] = useState({ name: '', value: '' })
+  const [lbForm, setLbForm] = useState({ name: '', protocol: 'HTTP', port: 80, targetDeploymentId: '' })
+  const [dbForm, setDbForm] = useState({ name: '', engine: 'postgres', version: '16', sizeGb: 10 })
+  const [revealedSecret, setRevealedSecret] = useState<{ id: string; value: string } | null>(null)
+  const [revealedDb, setRevealedDb] = useState<{ id: string; connectionString: string } | null>(null)
   const [gatewayName, setGatewayName] = useState('')
   const [selectedGatewayId, setSelectedGatewayId] = useState('')
   const [routeForm, setRouteForm] = useState({ method: 'GET', path: '/v1/', targetDeploymentId: '', stage: 'prod' })
@@ -263,6 +312,9 @@ export default function ConsolePage() {
   const showIamProjects = IAM_PROJECT_TABS.includes(tab)
   const showApiKeys = tab === 'apis-credentials' || tab === 'agent'
   const showGateway = GATEWAY_TABS.includes(tab)
+  const showSecrets = SECRET_TABS.includes(tab)
+  const showLoadBalancers = LB_TABS.includes(tab)
+  const showSqlInstances = SQL_INSTANCE_TABS.includes(tab)
 
   const { data: keysData, mutate: mutateKeys } = useSWR(
     showApiKeys ? 'console-keys' : null,
@@ -312,6 +364,18 @@ export default function ConsolePage() {
       ? ['console-gateway-keys', activeGatewayId]
       : null,
     () => fetcher<{ keys: GatewayKeyRow[] }>(`/api/gateways/${activeGatewayId}/keys`),
+  )
+  const { data: secretsData, mutate: mutateSecrets } = useSWR(
+    showSecrets ? ['console-secrets', projectId] : null,
+    () => fetcher<{ secrets: SecretRow[] }>(`/api/secrets${projectQuery}`),
+  )
+  const { data: lbsData, mutate: mutateLbs } = useSWR(
+    showLoadBalancers ? ['console-lbs', projectId] : null,
+    () => fetcher<{ loadBalancers: LoadBalancerRow[] }>(`/api/load-balancers${projectQuery}`),
+  )
+  const { data: dbsData, mutate: mutateDbs } = useSWR(
+    showSqlInstances ? ['console-dbs', projectId] : null,
+    () => fetcher<{ instances: DatabaseInstanceRow[] }>(`/api/databases${projectQuery}`),
   )
 
   const deployments = depData?.deployments ?? []
@@ -450,6 +514,121 @@ export default function ConsolePage() {
       await mutateVms()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'VM action failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleCreateSecret = async (e: FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      await apiSend('/api/secrets', 'POST', { ...secretForm, projectId: projectId || undefined })
+      setSecretForm({ name: '', value: '' })
+      await mutateSecrets()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Create secret failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleRevealSecret = async (id: string) => {
+    setBusy(true)
+    setError('')
+    try {
+      const res = await fetcher<{ secret: SecretRow }>(`/api/secrets/${id}?reveal=true`)
+      setRevealedSecret({ id, value: res.secret.value || '' })
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Reveal secret failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleDeleteSecret = async (id: string) => {
+    setBusy(true)
+    try {
+      await apiSend(`/api/secrets/${id}`, 'DELETE')
+      if (revealedSecret?.id === id) setRevealedSecret(null)
+      await mutateSecrets()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Delete secret failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleCreateLb = async (e: FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      await apiSend('/api/load-balancers', 'POST', {
+        name: lbForm.name,
+        protocol: lbForm.protocol,
+        port: lbForm.port,
+        targetDeploymentId: lbForm.targetDeploymentId || undefined,
+        projectId: projectId || undefined,
+      })
+      setLbForm({ name: '', protocol: 'HTTP', port: 80, targetDeploymentId: '' })
+      await mutateLbs()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Create load balancer failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleDeleteLb = async (id: string) => {
+    setBusy(true)
+    try {
+      await apiSend(`/api/load-balancers/${id}`, 'DELETE')
+      await mutateLbs()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Delete load balancer failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleCreateDb = async (e: FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    setError('')
+    try {
+      await apiSend('/api/databases', 'POST', { ...dbForm, projectId: projectId || undefined })
+      setDbForm({ name: '', engine: 'postgres', version: '16', sizeGb: 10 })
+      await mutateDbs()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Create database failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleRevealDb = async (id: string) => {
+    setBusy(true)
+    setError('')
+    try {
+      const res = await fetcher<{ instance: DatabaseInstanceRow }>(`/api/databases/${id}?reveal=true`)
+      setRevealedDb({ id, connectionString: res.instance.connectionString || '' })
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Reveal connection failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleDeleteDb = async (id: string) => {
+    setBusy(true)
+    try {
+      await apiSend(`/api/databases/${id}`, 'DELETE')
+      if (revealedDb?.id === id) setRevealedDb(null)
+      await mutateDbs()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Delete database failed')
     } finally {
       setBusy(false)
     }
@@ -1004,6 +1183,112 @@ export default function ConsolePage() {
             </>
           )}
 
+          {showSecrets && (
+            <>
+              <form className="cl-console-inline-form" onSubmit={handleCreateSecret}>
+                <input required placeholder="Secret name" value={secretForm.name} onChange={(e) => setSecretForm({ ...secretForm, name: e.target.value })} />
+                <input required type="password" placeholder="Secret value" value={secretForm.value} onChange={(e) => setSecretForm({ ...secretForm, value: e.target.value })} />
+                <button type="submit" className="gcp-btn-primary gcp-btn-compact" disabled={busy}>Store secret</button>
+              </form>
+              <p className="gcp-muted">Values are encrypted at rest (Fernet). Plaintext is only returned when you reveal.</p>
+              <div className="gcp-table">
+                <div className="gcp-table-row gcp-table-head cl-table-3">
+                  <span>Name</span><span>Version</span><span>Value</span>
+                </div>
+                {(secretsData?.secrets ?? []).length === 0 && (
+                  <div className="gcp-table-row cl-console-empty">No secrets yet.</div>
+                )}
+                {(secretsData?.secrets ?? []).map((s) => (
+                  <div key={s.id} className="gcp-table-row cl-table-3">
+                    <span className="gcp-service">{s.name}</span>
+                    <span className="gcp-muted">v{s.version}</span>
+                    <span className="gcp-muted">
+                      {revealedSecret?.id === s.id ? revealedSecret.value : '••••••••'}
+                    </span>
+                    <button type="button" className="cl-console-row-action" onClick={() => handleRevealSecret(s.id)} disabled={busy}>Reveal</button>
+                    <button type="button" className="cl-console-row-action" onClick={() => handleDeleteSecret(s.id)} disabled={busy}>Delete</button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {showLoadBalancers && (
+            <>
+              <form className="cl-console-inline-form" onSubmit={handleCreateLb}>
+                <input required placeholder="LB name" value={lbForm.name} onChange={(e) => setLbForm({ ...lbForm, name: e.target.value })} />
+                <select value={lbForm.protocol} onChange={(e) => setLbForm({ ...lbForm, protocol: e.target.value })}>
+                  <option value="HTTP">HTTP</option>
+                  <option value="HTTPS">HTTPS</option>
+                  <option value="TCP">TCP</option>
+                </select>
+                <input type="number" min={1} max={65535} value={lbForm.port} onChange={(e) => setLbForm({ ...lbForm, port: parseInt(e.target.value, 10) || 80 })} />
+                <select value={lbForm.targetDeploymentId} onChange={(e) => setLbForm({ ...lbForm, targetDeploymentId: e.target.value })}>
+                  <option value="">Target deployment (optional)</option>
+                  {deployments.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name}</option>
+                  ))}
+                </select>
+                <button type="submit" className="gcp-btn-primary gcp-btn-compact" disabled={busy}>Create LB</button>
+              </form>
+              <p className="gcp-muted">Metadata load balancers (stub provider). Data-plane wiring comes later — use API Gateway for HTTP APIs today.</p>
+              <div className="gcp-table">
+                <div className="gcp-table-row gcp-table-head cl-table-4">
+                  <span>Name</span><span>DNS</span><span>Protocol</span><span>Status</span>
+                </div>
+                {(lbsData?.loadBalancers ?? []).length === 0 && (
+                  <div className="gcp-table-row cl-console-empty">No load balancers yet.</div>
+                )}
+                {(lbsData?.loadBalancers ?? []).map((lb) => (
+                  <div key={lb.id} className="gcp-table-row cl-table-4">
+                    <span className="gcp-service">{lb.name}</span>
+                    <span className="gcp-muted">{lb.dnsName ?? '—'}</span>
+                    <span>{lb.protocol}:{lb.port}</span>
+                    <span className={`gcp-status gcp-status-${lb.status}`}>{lb.status}</span>
+                    <button type="button" className="cl-console-row-action" onClick={() => handleDeleteLb(lb.id)} disabled={busy}>Delete</button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {showSqlInstances && (
+            <>
+              <form className="cl-console-inline-form" onSubmit={handleCreateDb}>
+                <input required placeholder="Instance name" value={dbForm.name} onChange={(e) => setDbForm({ ...dbForm, name: e.target.value })} />
+                <select value={dbForm.engine} onChange={(e) => setDbForm({ ...dbForm, engine: e.target.value })}>
+                  <option value="postgres">Postgres</option>
+                  <option value="mysql">MySQL</option>
+                </select>
+                <input value={dbForm.version} onChange={(e) => setDbForm({ ...dbForm, version: e.target.value })} />
+                <input type="number" min={5} max={1024} value={dbForm.sizeGb} onChange={(e) => setDbForm({ ...dbForm, sizeGb: parseInt(e.target.value, 10) || 10 })} />
+                <button type="submit" className="gcp-btn-primary gcp-btn-compact" disabled={busy}>Create instance</button>
+              </form>
+              <p className="gcp-muted">Managed DB metadata (stub). Connection string shown once on reveal — no real RDS yet.</p>
+              <div className="gcp-table">
+                <div className="gcp-table-row gcp-table-head cl-table-4">
+                  <span>Name</span><span>Engine</span><span>Endpoint</span><span>Status</span>
+                </div>
+                {(dbsData?.instances ?? []).length === 0 && (
+                  <div className="gcp-table-row cl-console-empty">No database instances yet.</div>
+                )}
+                {(dbsData?.instances ?? []).map((inst) => (
+                  <div key={inst.id} className="gcp-table-row cl-table-4">
+                    <span className="gcp-service">{inst.name}</span>
+                    <span>{inst.engine} {inst.version}</span>
+                    <span className="gcp-muted">{inst.endpoint ?? '—'}</span>
+                    <span className={`gcp-status gcp-status-${inst.status}`}>{inst.status}</span>
+                    <button type="button" className="cl-console-row-action" onClick={() => handleRevealDb(inst.id)} disabled={busy}>Reveal</button>
+                    <button type="button" className="cl-console-row-action" onClick={() => handleDeleteDb(inst.id)} disabled={busy}>Delete</button>
+                    {revealedDb?.id === inst.id && (
+                      <span className="gcp-muted cl-console-status-msg">{revealedDb.connectionString}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
           {tab === 'solutions-all' && (
             <div className="cl-gc-hub">
               {PRODUCT_IDS.map((id) => (
@@ -1067,6 +1352,21 @@ export default function ConsolePage() {
                   used: quotaReport.usage.buckets,
                   limit: quotaReport.limits.maxBuckets,
                 },
+                {
+                  label: 'Secrets',
+                  used: quotaReport.usage.secrets ?? 0,
+                  limit: quotaReport.limits.maxSecrets ?? 50,
+                },
+                {
+                  label: 'Load balancers',
+                  used: quotaReport.usage.loadBalancers ?? 0,
+                  limit: quotaReport.limits.maxLoadBalancers ?? 5,
+                },
+                {
+                  label: 'Database instances',
+                  used: quotaReport.usage.databaseInstances ?? 0,
+                  limit: quotaReport.limits.maxDatabaseInstances ?? 3,
+                },
               ].map((row) => {
                 const pct = row.limit > 0 ? Math.min(100, Math.round((row.used / row.limit) * 100)) : 0
                 return (
@@ -1103,7 +1403,13 @@ export default function ConsolePage() {
 
           {showSqlGetStarted && (
             <div className="cl-gc-stub">
-              <p>Managed Postgres/MySQL isn&apos;t provisioned yet. Use Cloud Storage for object data today.</p>
+              <p>
+                Cloud SQL instances are available under Instances. Open that tab to provision
+                Postgres/MySQL metadata (stub provider). Real RDS hosting is next.
+              </p>
+              <button type="button" className="gcp-btn-primary gcp-btn-compact" onClick={() => openService('sql-instances')}>
+                Go to Instances
+              </button>
             </div>
           )}
         </div>

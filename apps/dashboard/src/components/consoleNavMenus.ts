@@ -50,6 +50,8 @@ export type ServiceId =
   | 'gateway-routes'
   | 'gateway-keys'
   | 'gateway-deploy'
+  | 'lb'
+  | 'lb-load-balancers'
   | 'agent'
   | 'agent-overview'
   | 'agent-studio'
@@ -267,6 +269,8 @@ export const SERVICE_LABELS: Record<ServiceId, string> = {
   'gateway-routes': 'Routes',
   'gateway-keys': 'Consumer keys',
   'gateway-deploy': 'Deploy config',
+  lb: 'Load Balancing',
+  'lb-load-balancers': 'Load balancers',
   agent: 'Agent Platform',
   'agent-overview': 'Overview',
   'agent-studio': 'Studio',
@@ -513,6 +517,11 @@ export const SUBMENU_SECTIONS: Partial<Record<ServiceId, SubMenuSection[]>> = {
       { id: 'gateway-routes', label: 'Routes' },
       { id: 'gateway-keys', label: 'Consumer keys' },
       { id: 'gateway-deploy', label: 'Deploy config' },
+    ],
+  }],
+  lb: [{
+    items: [
+      { id: 'lb-load-balancers', label: 'Load balancers' },
     ],
   }],
   agent: [{
@@ -846,6 +855,9 @@ export function isActiveInMenu(active: ServiceId, parentId: ServiceId): boolean 
 }
 
 export const GATEWAY_TABS: ServiceId[] = ['gateway', 'gateway-routes', 'gateway-keys', 'gateway-deploy']
+export const LB_TABS: ServiceId[] = ['lb', 'lb-load-balancers']
+export const SECRET_TABS: ServiceId[] = ['sec-secret-manager']
+export const SQL_INSTANCE_TABS: ServiceId[] = ['sql-instances']
 export const IAM_PROJECT_TABS: ServiceId[] = ['iam', 'iam-iam', 'iam-create-project', 'iam-manage-resources']
 export const COMPUTE_VM_TABS: ServiceId[] = ['compute', 'compute-vm-instances']
 export const K8S_DEPLOY_TABS: ServiceId[] = ['kubernetes', 'k8s-clusters', 'k8s-workloads']
@@ -900,7 +912,7 @@ export function isK8sStubTab(tab: ServiceId): boolean {
 }
 
 export function isSecurityStubTab(tab: ServiceId): boolean {
-  return tab.startsWith('sec-') && !SECURITY_AUDIT_TABS.includes(tab)
+  return tab.startsWith('sec-') && !SECURITY_AUDIT_TABS.includes(tab) && !SECRET_TABS.includes(tab)
 }
 
 export function isBigQueryStubTab(tab: ServiceId): boolean {
@@ -924,7 +936,7 @@ export function isDatabasesStubTab(tab: ServiceId): boolean {
 }
 
 export function isSqlStubTab(tab: ServiceId): boolean {
-  return tab.startsWith('sql-') && !SQL_GET_STARTED_TABS.includes(tab)
+  return tab.startsWith('sql-') && !SQL_GET_STARTED_TABS.includes(tab) && !SQL_INSTANCE_TABS.includes(tab)
 }
 
 export function isOverviewTab(tab: ServiceId): boolean {

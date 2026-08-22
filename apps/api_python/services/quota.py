@@ -24,6 +24,12 @@ def build_quota_report(tenant_id: str) -> dict[str, Any]:
             'cpu': round(max(0.0, float(limits['maxCpu']) - float(usage['totalCpu'])), 3),
             'memoryMb': max(0, int(limits['maxMemoryMb']) - int(usage['totalMemoryMb'])),
             'buckets': max(0, int(limits['maxBuckets']) - int(usage['buckets'])),
+            'secrets': max(0, int(limits['maxSecrets']) - int(usage['secrets'])),
+            'loadBalancers': max(0, int(limits['maxLoadBalancers']) - int(usage['loadBalancers'])),
+            'databaseInstances': max(
+                0,
+                int(limits['maxDatabaseInstances']) - int(usage['databaseInstances']),
+            ),
             'maxInstancesPerDeployment': limits['maxInstances'],
         },
     }
@@ -81,4 +87,34 @@ def assert_bucket_allowed(tenant_id: str) -> None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f'Bucket limit reached ({limits["maxBuckets"]} max)',
+        )
+
+
+def assert_secret_allowed(tenant_id: str) -> None:
+    limits = _limits_for_tenant(tenant_id)
+    usage = db.summarize_tenant_usage(tenant_id)
+    if int(usage['secrets']) >= limits['maxSecrets']:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f'Secret limit reached ({limits["maxSecrets"]} max)',
+        )
+
+
+def assert_load_balancer_allowed(tenant_id: str) -> None:
+    limits = _limits_for_tenant(tenant_id)
+    usage = db.summarize_tenant_usage(tenant_id)
+    if int(usage['loadBalancers']) >= limits['maxLoadBalancers']:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f'Load balancer limit reached ({limits["maxLoadBalancers"]} max)',
+        )
+
+
+def assert_database_allowed(tenant_id: str) -> None:
+    limits = _limits_for_tenant(tenant_id)
+    usage = db.summarize_tenant_usage(tenant_id)
+    if int(usage['databaseInstances']) >= limits['maxDatabaseInstances']:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f'Database instance limit reached ({limits["maxDatabaseInstances"]} max)',
         )
