@@ -4,6 +4,9 @@ from functools import lru_cache
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# Overlays from Cloudlane ops vault (system_secrets) applied after DB connect.
+_RUNTIME_OVERRIDES: dict[str, str] = {}
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
@@ -35,13 +38,25 @@ class Settings(BaseSettings):
         return bool(os.getenv('NETLIFY') or os.getenv('AWS_LAMBDA_FUNCTION_NAME'))
 
 
+def set_runtime_overrides(values: dict[str, str]) -> None:
+    """Merge vault-backed settings and bust the settings cache."""
+    cleaned = {k: v for k, v in values.items() if v is not None and str(v) != ''}
+    _RUNTIME_OVERRIDES.update(cleaned)
+    get_settings.cache_clear()
+
+
+def clear_runtime_overrides() -> None:
+    _RUNTIME_OVERRIDES.clear()
+    get_settings.cache_clear()
+
+
 @lru_cache()
 def get_settings() -> Settings:
-    overrides: dict[str, str | int] = {}
+    overrides: dict[str, str | int] = dict(_RUNTIME_OVERRIDES)
     if os.getenv('DATABASE_URL'):
-        overrides['database_url'] = os.getenv('DATABASE_URL')
+        overrides['database_url'] = os.getenv('DATABASE_URL')  # type: ignore[assignment]
     elif os.getenv('MONGODB_URI'):
-        overrides['database_url'] = os.getenv('MONGODB_URI')
+        overrides['database_url'] = os.getenv('MONGODB_URI')  # type: ignore[assignment]
     if os.getenv('NETLIFY') or os.getenv('AWS_LAMBDA_FUNCTION_NAME'):
         if 'database_url' not in overrides:
             overrides['database_url'] = os.getenv('DATABASE_URL') or os.getenv('MONGODB_URI') or ''

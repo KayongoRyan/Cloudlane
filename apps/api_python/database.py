@@ -214,6 +214,20 @@ def map_secret(doc: dict[str, Any], *, include_value: bool = False) -> dict[str,
     return out
 
 
+def map_system_secret(doc: dict[str, Any], *, include_value: bool = False) -> dict[str, Any]:
+    out = {
+        'id': ref_str(doc['_id']),
+        'name': doc['name'],
+        'version': doc.get('version', 1),
+        'createdAt': doc.get('createdAt'),
+        'updatedAt': doc.get('updatedAt'),
+    }
+    if include_value and doc.get('ciphertext'):
+        from services.secrets_crypto import decrypt_secret
+        out['value'] = decrypt_secret(doc['ciphertext'])
+    return out
+
+
 def map_load_balancer(doc: dict[str, Any]) -> dict[str, Any]:
     return {
         'id': ref_str(doc['_id']),
@@ -414,6 +428,7 @@ def ensure_indexes() -> None:
     col('invoices').create_index([('tenantId', 1), ('createdAt', -1)])
     col('vms').create_index([('tenantId', 1), ('name', 1)])
     col('secrets').create_index([('tenantId', 1), ('name', 1)], unique=True)
+    col('system_secrets').create_index('name', unique=True)
     col('load_balancers').create_index([('tenantId', 1), ('name', 1)], unique=True)
     col('database_instances').create_index([('tenantId', 1), ('name', 1)], unique=True)
     col('gateways').create_index([('tenantId', 1), ('slug', 1)], unique=True)
@@ -1294,4 +1309,44 @@ def delete_database_instance(instance_id: str, tenant_id: str) -> bool:
     if not is_object_id_string(instance_id):
         return False
     result = col('database_instances').delete_one({'_id': as_object_id(instance_id), **tenant_clause(tenant_id)})
+    return result.deleted_count == 1
+
+
+def find_system_secret_by_name(name: str, *, include_value: bool = False) -> dict[str, Any] | None:
+    doc = col('system_secrets').find_one({'name': name})
+    return map_system_secret(doc, include_value=include_value) if doc else None
+
+
+def list_system_secrets() -> list[dict[str, Any]]:
+    docs = col('system_secrets').find().sort('name', 1)
+    return [map_system_secret(doc) for doc in docs]
+
+
+def upsert_system_secret(name: str, ciphertext: str) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    existing = col('system_secrets').find_one({'name': name})
+    if existing:
+        doc = col('system_secrets').find_one_and_update(
+            {'name': name},
+            {
+                '$set': {'ciphertext': ciphertext, 'updatedAt': now},
+                '$inc': {'version': 1},
+            },
+            return_document=ReturnDocument.AFTER,
+        )
+        return map_system_secret(doc)
+    doc = {
+        'name': name,
+        'ciphertext': ciphertext,
+        'version': 1,
+        'createdAt': now,
+        'updatedAt': now,
+    }
+    result = col('system_secrets').insert_one(doc)
+    doc['_id'] = result.inserted_id
+    return map_system_secret(doc)
+
+
+def delete_system_secret(name: str) -> bool:
+    result = col('system_secrets').delete_one({'name': name})
     return result.deleted_count == 1

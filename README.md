@@ -101,6 +101,7 @@ Bearer JWT or `X-API-Key` (`cl_*` platform keys). Gateway consumer keys (`gw_*`)
 | `GET` | `/api/audit-logs` | JWT / API key |
 | `GET/POST` | `/api/usage-metrics` | JWT / API key |
 | `GET/POST` | `/api/secrets` (+ reveal/rotate/delete) | JWT / API key |
+| `GET/POST` | `/api/ops/secrets` (+ migrate) | JWT **admin** (control-plane vault) |
 | `GET/POST` | `/api/load-balancers` | JWT / API key |
 | `GET/POST` | `/api/databases` | JWT / API key |
 | `POST` | `/graphql` | JWT / API key (read subset) |
@@ -455,7 +456,7 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 - [x] **Async deploy orchestrator** — `provision_jobs`, worker, `POST /api/deployments` → 202
 - [x] **Quota service** — CPU/memory at max scale, deploy count, buckets; `GET /api/quota` + Hub Quotas UI
 - [x] **Provider drivers** — `services/providers` (K8s compute, MinIO storage)
-- [x] **Secret Vaults** — `/api/secrets` + Fernet encryption + Secret Manager console
+- [x] **Secret Vaults** — tenant `/api/secrets` + ops vault `/api/ops/secrets` (Cloudlane secret migration)
 - [x] **Load Balancing** — `/api/load-balancers` + console (stub data-plane)
 - [x] **Managed DBs + GraphQL** — `/api/databases` stub + `/graphql` read API
 - [ ] Scale-to-zero (KEDA)

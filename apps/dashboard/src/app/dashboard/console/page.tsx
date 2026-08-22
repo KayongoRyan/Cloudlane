@@ -106,6 +106,17 @@ interface SecretRow {
   value?: string
 }
 
+interface OpsSecretRow {
+  name: string
+  description: string
+  scope: string
+  inVault: boolean
+  inEnv: boolean
+  version?: number | null
+  updatedAt?: string | null
+  value?: string
+}
+
 interface LoadBalancerRow {
   id: string
   name: string
@@ -238,6 +249,7 @@ export default function ConsolePage() {
   const [lbForm, setLbForm] = useState({ name: '', protocol: 'HTTP', port: 80, targetDeploymentId: '' })
   const [dbForm, setDbForm] = useState({ name: '', engine: 'postgres', version: '16', sizeGb: 10 })
   const [revealedSecret, setRevealedSecret] = useState<{ id: string; value: string } | null>(null)
+  const [revealedOpsSecret, setRevealedOpsSecret] = useState<{ name: string; value: string } | null>(null)
   const [revealedDb, setRevealedDb] = useState<{ id: string; connectionString: string } | null>(null)
   const [gatewayName, setGatewayName] = useState('')
   const [selectedGatewayId, setSelectedGatewayId] = useState('')
@@ -368,6 +380,10 @@ export default function ConsolePage() {
   const { data: secretsData, mutate: mutateSecrets } = useSWR(
     showSecrets ? ['console-secrets', projectId] : null,
     () => fetcher<{ secrets: SecretRow[] }>(`/api/secrets${projectQuery}`),
+  )
+  const { data: opsSecretsData, mutate: mutateOpsSecrets } = useSWR(
+    showSecrets ? 'console-ops-secrets' : null,
+    () => fetcher<{ secrets: OpsSecretRow[]; note?: string }>('/api/ops/secrets'),
   )
   const { data: lbsData, mutate: mutateLbs } = useSWR(
     showLoadBalancers ? ['console-lbs', projectId] : null,
@@ -555,6 +571,38 @@ export default function ConsolePage() {
       await mutateSecrets()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Delete secret failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleMigrateOpsSecrets = async () => {
+    setBusy(true)
+    setError('')
+    try {
+      const res = await apiSend<{ migrated: string[]; skipped: string[] }>('/api/ops/secrets/migrate', 'POST')
+      await mutateOpsSecrets()
+      setError('')
+      alert(`Migrated: ${(res?.migrated ?? []).join(', ') || 'none'}\nSkipped: ${(res?.skipped ?? []).join(', ') || 'none'}`)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Ops secret migration failed (admin only)')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleRevealOpsSecret = async (name: string) => {
+    if (name === 'DATABASE_URL' || name === 'SECRETS_MASTER_KEY') {
+      setError('Bootstrap secrets stay in env and cannot be revealed from the vault')
+      return
+    }
+    setBusy(true)
+    setError('')
+    try {
+      const res = await fetcher<{ secret: OpsSecretRow }>(`/api/ops/secrets/${name}?reveal=true`)
+      setRevealedOpsSecret({ name, value: res.secret.value || '' })
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Reveal ops secret failed (admin only)')
     } finally {
       setBusy(false)
     }
@@ -1185,6 +1233,7 @@ export default function ConsolePage() {
 
           {showSecrets && (
             <>
+              <h3 style={{ marginTop: 0 }}>Tenant secrets</h3>
               <form className="cl-console-inline-form" onSubmit={handleCreateSecret}>
                 <input required placeholder="Secret name" value={secretForm.name} onChange={(e) => setSecretForm({ ...secretForm, name: e.target.value })} />
                 <input required type="password" placeholder="Secret value" value={secretForm.value} onChange={(e) => setSecretForm({ ...secretForm, value: e.target.value })} />
@@ -1209,6 +1258,39 @@ export default function ConsolePage() {
                     <button type="button" className="cl-console-row-action" onClick={() => handleDeleteSecret(s.id)} disabled={busy}>Delete</button>
                   </div>
                 ))}
+              </div>
+
+              <h3 style={{ marginTop: '2rem' }}>Control plane (Cloudlane secret migration)</h3>
+              <p className="gcp-muted">
+                {opsSecretsData?.note
+                  || 'Migrate JWT / MinIO / Redis / IremboPay keys from .env into the encrypted ops vault. DATABASE_URL and SECRETS_MASTER_KEY stay in env.'}
+              </p>
+              <button type="button" className="gcp-btn-primary gcp-btn-compact" onClick={handleMigrateOpsSecrets} disabled={busy}>
+                Migrate from .env
+              </button>
+              <div className="gcp-table" style={{ marginTop: '1rem' }}>
+                <div className="gcp-table-row gcp-table-head cl-table-4">
+                  <span>Name</span><span>Scope</span><span>Vault</span><span>Env</span>
+                </div>
+                {(opsSecretsData?.secrets ?? []).map((s) => (
+                  <div key={s.name} className="gcp-table-row cl-table-4">
+                    <span className="gcp-service">{s.name}</span>
+                    <span className="gcp-muted">{s.scope}</span>
+                    <span>{s.inVault ? `yes v${s.version ?? 1}` : 'no'}</span>
+                    <span>{s.inEnv ? 'yes' : 'no'}</span>
+                    {s.scope === 'ops' && (
+                      <button type="button" className="cl-console-row-action" onClick={() => handleRevealOpsSecret(s.name)} disabled={busy}>
+                        Reveal
+                      </button>
+                    )}
+                    {revealedOpsSecret?.name === s.name && (
+                      <span className="gcp-muted cl-console-status-msg">{revealedOpsSecret.value}</span>
+                    )}
+                  </div>
+                ))}
+                {!opsSecretsData?.secrets?.length && (
+                  <div className="gcp-table-row cl-console-empty">Admin only — sign in as tenant admin to manage ops secrets.</div>
+                )}
               </div>
             </>
           )}

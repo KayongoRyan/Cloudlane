@@ -13,7 +13,6 @@ from config import get_settings
 from database import find_api_key, find_user_by_id_and_tenant, mark_api_key_used
 from services.utils import hash_api_key
 
-settings = get_settings()
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
@@ -48,6 +47,7 @@ def get_password_hash(password: str) -> str:
 
 
 def create_access_token(user_id: str, tenant_id: str, role: str) -> str:
+    settings = get_settings()
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.jwt_expire_minutes)
     payload = {
         'userId': user_id,
@@ -78,6 +78,7 @@ async def authenticate_request(
     if not credentials or credentials.scheme.lower() != 'bearer':
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Missing or invalid authorization header')
 
+    settings = get_settings()
     try:
         payload = jwt.decode(credentials.credentials, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
         user_id = payload.get('userId')
@@ -93,6 +94,11 @@ async def authenticate_request(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='User not found')
 
     return AuthContext(tenant_id=tenant_id, user_id=user_id, role=role or user['role'], scopes=['deploy', 'read'])
+
+
+def require_admin(auth: AuthContext) -> None:
+    if auth.role != 'admin':
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Admin role required')
 
 
 def client_ip(request: Request) -> str | None:

@@ -4,14 +4,22 @@ from config import get_settings
 class MinioService:
     def __init__(self) -> None:
         self._client = None
+        self._refresh_creds()
+
+    def _refresh_creds(self) -> None:
         settings = get_settings()
         self.endpoint = settings.minio_endpoint
         self.access_key = settings.minio_access_key
         self.secret_key = settings.minio_secret_key
 
+    def reset(self) -> None:
+        self._client = None
+        self._refresh_creds()
+
     def _get_client(self):
         if self._client is not None:
             return self._client
+        self._refresh_creds()
         try:
             from minio import Minio
             self._client = Minio(

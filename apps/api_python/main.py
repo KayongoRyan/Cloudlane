@@ -21,6 +21,7 @@ from routes.gateways import router as gateways_router
 from routes.gateway_internal import router as gateway_internal_router
 from routes.quota import router as quota_router
 from routes.secrets import router as secrets_router
+from routes.ops_secrets import router as ops_secrets_router
 from routes.load_balancers import router as load_balancers_router
 from routes.databases import router as databases_router
 from routes.graphql import router as graphql_router
@@ -39,6 +40,10 @@ async def lifespan(_app: FastAPI):
         try:
             get_db()
             ensure_indexes()
+            from services.ops_vault import apply_ops_secrets_to_runtime
+            applied = apply_ops_secrets_to_runtime()
+            if applied:
+                print(f'Applied ops vault secrets: {", ".join(applied)}')
             from services.gateway_config import sync_gateway_configs
             sync_gateway_configs()
         except Exception as exc:
@@ -77,6 +82,7 @@ app.include_router(vms_router, prefix='/api/vms', tags=['vms'])
 app.include_router(gateways_router, prefix='/api/gateways', tags=['gateways'])
 app.include_router(quota_router, prefix='/api/quota', tags=['quota'])
 app.include_router(secrets_router, prefix='/api/secrets', tags=['secrets'])
+app.include_router(ops_secrets_router, prefix='/api/ops/secrets', tags=['ops-secrets'])
 app.include_router(load_balancers_router, prefix='/api/load-balancers', tags=['load-balancers'])
 app.include_router(databases_router, prefix='/api/databases', tags=['databases'])
 app.include_router(graphql_router, prefix='/graphql', tags=['graphql'])

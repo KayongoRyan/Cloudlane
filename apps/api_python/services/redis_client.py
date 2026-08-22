@@ -26,6 +26,11 @@ def get_redis():
         return None
 
 
+def reset_client() -> None:
+    global _client
+    _client = None
+
+
 def check_rate_limit(key: str, limit: int, window_seconds: int = 60) -> tuple[bool, int]:
     """Sliding-window rate limit. Returns (allowed, current_count)."""
     client = get_redis()

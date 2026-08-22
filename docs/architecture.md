@@ -281,7 +281,7 @@ Host ports `6380` / `9010` avoid conflicts when another Redis or MinIO already o
 3. ~~**Provider driver interface**~~ — done (`services/providers/` for compute + object storage)
 4. ~~**General load balancer product**~~ — done (`/api/load-balancers`, console Load Balancing; stub data-plane)
 5. ~~**RDS / GraphQL**~~ — done (`/api/databases` stub + `/graphql` read API)
-6. ~~**Secret Vaults**~~ — done (`/api/secrets`, Fernet at rest via `SECRETS_MASTER_KEY` / `JWT_SECRET`)
+6. ~~**Secret Vaults**~~ — done (tenant `/api/secrets` + ops `/api/ops/secrets` Cloudlane secret migration)
 
 ### Still open
 
@@ -290,7 +290,20 @@ Host ports `6380` / `9010` avoid conflicts when another Redis or MinIO already o
 - Full GraphQL schema (current `/graphql` is a thin query selector)
 - Scale-to-zero (KEDA)
 - IremboPay production charges
-- Move control-plane env secrets (JWT/DB/MinIO) into the vault product for ops
+
+### Ops vault (Cloudlane secret migration)
+
+Done: control-plane secrets can move from `.env` into encrypted Mongo `system_secrets`.
+
+| Stays in env (bootstrap) | Migratable via `/api/ops/secrets` |
+|---|---|
+| `DATABASE_URL` | `JWT_SECRET` |
+| `SECRETS_MASTER_KEY` (Fernet root) | `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY` |
+| | `REDIS_URL`, `IREMBOPAY_API_KEY` |
+
+- `POST /api/ops/secrets/migrate` — copy current settings into vault (admin)
+- Startup applies vault overlays via `apply_ops_secrets_to_runtime()`
+- Console: **Cloudlane Secrets Manager** → Control plane panel
 
 ---
 
