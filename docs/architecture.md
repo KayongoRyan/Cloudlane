@@ -117,6 +117,7 @@ Replace a single “customer-facing API” box with two distinct entry points:
 | Deployments | `/api/deployments` | `routes/deployments.py` | Live |
 | Projects | `/api/projects` | `routes/projects.py` | Live |
 | Object storage | `/api/buckets` | `routes/buckets.py` | Live |
+| Quota | `/api/quota` | `routes/quota.py` | Live |
 | VMs | `/api/vms` | `routes/vms.py` | Stub |
 | API Gateway admin | `/api/gateways` | `routes/gateways.py` | Live |
 | Usage metrics | `/api/usage-metrics` | `routes/usage_metrics.py` | Live |
@@ -182,10 +183,11 @@ Default domain: `gateway.cloudlane.run` (see `GATEWAY_BASE_DOMAIN` in `config.py
 | K8s namespace isolation | Per-tenant namespace in `deployments.py` | When `KUBECONFIG` set |
 | Kubernetes provisioning | `services/kubernetes.py` — namespace, deployment, service, ingress | Optional |
 | Async provision worker | `worker.py`, `services/provision_worker.py`, `provision_jobs` collection | Live |
-| Quota | `DEFAULT_TENANT_LIMITS` in `database.py`; deploy count check in `deployments.py` | Partial |
+| Quota | `services/quota.py` — CPU×maxInstances, memory, deploy count, buckets; `GET /api/quota` | Live |
 | Rate limiting | `services/redis_client.py` | Live |
 | Terraform / IaC | — | Not built |
 | Async job queue | — | Implemented via `provision_jobs` |
+| Provider drivers | `services/providers/` — `ComputeProvider`, `ObjectStorageProvider` | Live |
 
 **Models:** `apps/api_python/schemas.py`  
 **Persistence:** `apps/api_python/database.py` (mappers, CRUD, `ensure_indexes()`)
@@ -200,12 +202,12 @@ Platform keys default to `deploy`, `read`. Gateway admin accepts `gateway:read` 
 
 | Service | Wrapper | Local dev |
 |---|---|---|
-| S3 / object storage | `services/minio_client.py` | MinIO `:9010`, console `:9011` |
-| Kubernetes | `services/kubernetes.py` | Optional; set `KUBECONFIG` |
+| S3 / object storage | `services/providers/minio.py` → `minio_client.py` | MinIO `:9010`, console `:9011` |
+| Kubernetes | `services/providers/k8s.py` → `kubernetes.py` | Optional; set `KUBECONFIG` |
 | VMs (EC2-style) | `routes/vms.py` | Stub only |
 | RDS / managed DB | Console stubs | Not built |
 | Load balancer | Nginx `gateway-proxy` | Customer API traffic only |
-| Deployment ingress | K8s ingress via `kubernetes.py` | When cluster connected |
+| Deployment ingress | K8s ingress via compute provider | When cluster connected |
 
 **Local infra:** `docker-compose.yml` — mongo, minio, redis, prometheus, grafana, gateway-proxy.
 
@@ -250,8 +252,9 @@ Host ports `6380` / `9010` avoid conflicts when another Redis or MinIO already o
 | Usage / Bills | Metrics + basic billing |
 | Terraform / IaC | Missing |
 | Async job queue | Mongo `provision_jobs` + `provision-worker` container |
-| Quota manager | Partial (tenant limits, deploy count) |
+| Quota manager | Live — CPU/memory at max scale, deploy count, buckets; console Hub Quotas |
 | Rate limiter | Redis on control plane + gateway edge |
+| Provider drivers | `services/providers` — K8s compute + MinIO storage |
 | EC2 / VMs | API stub |
 | K8s | Real when cluster configured |
 | S3 | MinIO |
@@ -262,10 +265,11 @@ Host ports `6380` / `9010` avoid conflicts when another Redis or MinIO already o
 ## Recommended build order
 
 1. ~~**Async orchestrator**~~ — done (`provision_jobs` + worker; deploy returns 202)
-2. **Quota service** — enforce CPU, memory, and storage limits consistently, not only deploy count.
-3. **Provider driver interface** — `Provisioner.create_deployment()`, `create_bucket()`, etc., instead of inline K8s/MinIO calls in route handlers.
+2. ~~**Quota service**~~ — done (`services/quota.py`, `/api/quota`, console Hub Quotas)
+3. ~~**Provider driver interface**~~ — done (`services/providers/` for compute + object storage)
 4. **General load balancer product** — separate from API Gateway if L4/L7 for VMs/K8s is needed.
 5. **RDS / GraphQL** — after Layer 2 is solid.
+6. **Secret Vaults** — move JWT/DB/MinIO creds off flat `.env` (diagram Data Layer).
 
 ---
 

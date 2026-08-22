@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 
 import database as db
-from services.kubernetes import kubernetes_service
+from services.providers import get_compute_provider
 
 
 def record_deploy_usage(tenant_id: str, deployment_id: str, cpu: float) -> None:
@@ -20,12 +20,13 @@ def record_deploy_usage(tenant_id: str, deployment_id: str, cpu: float) -> None:
 
 
 def provision_deployment(job: dict) -> None:
-    """Run K8s provisioning for a deployment.create job. Raises on hard failure."""
+    """Run compute-provider provisioning for a deployment.create job. Raises on hard failure."""
     payload = job.get('payload') or {}
     deployment_id = job['deploymentId']
     tenant_id = job['tenantId']
+    compute = get_compute_provider()
 
-    if not kubernetes_service.is_ready():
+    if not compute.is_ready():
         db.update_deployment_status(
             deployment_id,
             'pending',
@@ -41,13 +42,13 @@ def provision_deployment(job: dict) -> None:
     host = payload['host']
     cpu = payload.get('cpu', 0.5)
 
-    kubernetes_service.create_namespace(
+    compute.create_namespace(
         k8s_namespace,
         {'tenant-id': tenant_id, 'cloudlane.io/managed': 'true'},
     )
-    kubernetes_service.create_deployment(k8s_namespace, deployment_name, image, port, min_instances)
-    kubernetes_service.create_service(k8s_namespace, deployment_name, port, port)
-    kubernetes_service.create_ingress(
+    compute.create_deployment(k8s_namespace, deployment_name, image, port, min_instances)
+    compute.create_service(k8s_namespace, deployment_name, port, port)
+    compute.create_ingress(
         k8s_namespace,
         f'{deployment_name}-ingress',
         deployment_name,

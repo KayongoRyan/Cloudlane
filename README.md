@@ -100,7 +100,7 @@ Bearer JWT or `X-API-Key` (`cl_*` platform keys). Gateway consumer keys (`gw_*`)
 | `DELETE` | `/api/api-keys/:id` | JWT / API key |
 | `GET` | `/api/audit-logs` | JWT / API key |
 | `GET/POST` | `/api/usage-metrics` | JWT / API key |
-| `GET` | `/api/billing`, `/api/monitoring` | JWT / API key |
+| `GET` | `/api/billing`, `/api/monitoring`, `/api/quota` | JWT / API key |
 | `GET` | `/internal/gateway/validate` | Nginx `auth_request` (edge) |
 | `GET` | `/health` | public (no DB) |
 
@@ -449,12 +449,15 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 - [x] VM lifecycle API (stub IP; hypervisor deferred)
 - [x] **API Gateway** — CRUD, Nginx edge (`gateway-proxy`), `gw_*` keys, Redis rate limits
 - [x] **Async deploy orchestrator** — `provision_jobs`, worker, `POST /api/deployments` → 202
+- [x] **Quota service** — CPU/memory at max scale, deploy count, buckets; `GET /api/quota` + Hub Quotas UI
+- [x] **Provider drivers** — `services/providers` (K8s compute, MinIO storage)
 - [ ] Scale-to-zero (KEDA)
 - [ ] IremboPay production charges
 
 ### Phase 2 — Polish
-- Quota service (CPU/memory/instances, not just deploy count)
-- Audit log viewer, quotas UI from `tenants.limits`, alerting, Loki
+- Audit log viewer, alerting, Loki
+- Secret vaults (JWT/DB/MinIO off `.env`)
+- General load balancer product (beyond API Gateway)
 
 ### Phase 3 — Broader surface
 - Managed Postgres for customers, secrets vault, custom domains, orgs/IAM depth
@@ -468,4 +471,4 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 
 ## Status
 
-V1 control plane in **FastAPI** + **Next.js console**. **API Gateway** (Nginx edge on `:8080`) and **async provisioning** (worker + `provision_jobs`) are live locally. Local stack: `docker compose up` (Mongo, MinIO, Redis, Prometheus, Grafana, gateway-proxy, provision-worker). Next up: quota enforcement, then provider driver interface — see [docs/architecture.md](docs/architecture.md).
+V1 control plane in **FastAPI** + **Next.js console**. **API Gateway**, **async provisioning**, **quota enforcement**, and **provider drivers** (K8s/MinIO) are live. Local stack: `docker compose up` (Mongo, MinIO, Redis, Prometheus, Grafana, gateway-proxy, provision-worker). Next up: load balancer product / secret vaults / RDS — see [docs/architecture.md](docs/architecture.md).

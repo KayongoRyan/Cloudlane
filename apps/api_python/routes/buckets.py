@@ -3,7 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 import database as db
 from auth import AuthContext, authenticate_request, client_ip, require_scopes
 from schemas import BucketCreate
-from services.minio_client import minio_service
+from services.providers import get_object_storage_provider
+from services.quota import assert_bucket_allowed
 
 router = APIRouter()
 
@@ -24,6 +25,8 @@ async def create_bucket(
     auth: AuthContext = Depends(authenticate_request),
 ):
     require_scopes(auth, 'deploy')
+    assert_bucket_allowed(auth.tenant_id)
+
     project = db.get_or_create_default_project(auth.tenant_id)
     if payload.projectId:
         found = db.find_project_by_id(payload.projectId, auth.tenant_id)
@@ -35,7 +38,8 @@ async def create_bucket(
     if db.find_bucket_by_name(name, auth.tenant_id):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail='Bucket already exists')
 
-    minio_service.ensure_bucket(name)
+    storage = get_object_storage_provider()
+    storage.ensure_bucket(name)
     bucket = db.create_bucket(auth.tenant_id, project['id'], name)
     db.write_audit_log({
         'tenantId': auth.tenant_id,
@@ -54,7 +58,7 @@ async def list_objects(bucket_name: str, auth: AuthContext = Depends(authenticat
     bucket = db.find_bucket_by_name(bucket_name, auth.tenant_id)
     if not bucket:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Bucket not found')
-    objects = minio_service.list_objects(bucket_name)
+    objects = get_object_storage_provider().list_objects(bucket_name)
     return {'objects': objects}
 
 
@@ -68,7 +72,7 @@ async def upload_url(
     bucket = db.find_bucket_by_name(bucket_name, auth.tenant_id)
     if not bucket:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Bucket not found')
-    url = minio_service.presigned_upload(bucket_name, objectName)
+    url = get_object_storage_provider().presigned_upload(bucket_name, objectName)
     if not url:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='MinIO not available')
     return {'uploadUrl': url, 'objectName': objectName}

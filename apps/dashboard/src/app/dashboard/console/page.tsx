@@ -109,6 +109,30 @@ interface MonitoringSummary {
   recentMetrics: { metricType: string; value: number; windowStart: string }[]
 }
 
+interface QuotaReport {
+  limits: {
+    maxDeployments: number
+    maxCpu: number
+    maxMemoryMb: number
+    maxInstances: number
+    maxBuckets: number
+  }
+  usage: {
+    deployments: number
+    totalCpu: number
+    totalMemoryMb: number
+    totalMaxInstances: number
+    buckets: number
+  }
+  available: {
+    deployments: number
+    cpu: number
+    memoryMb: number
+    buckets: number
+    maxInstancesPerDeployment?: number
+  }
+}
+
 interface AuditLog {
   id: string
   action: string
@@ -259,6 +283,10 @@ export default function ConsolePage() {
   const { data: monitoring, mutate: mutateMonitoring } = useSWR(
     isHubView || showMonitoring ? 'console-monitoring' : null,
     () => fetcher<MonitoringSummary>('/api/monitoring/summary'),
+  )
+  const { data: quotaReport } = useSWR(
+    tab === 'hub-quotas' || tab === 'iam-quotas' ? 'console-quota' : null,
+    () => fetcher<QuotaReport>('/api/quota'),
   )
   const { data: vmsData, mutate: mutateVms } = useSWR(
     showComputeVms ? ['console-vms', projectId] : null,
@@ -1016,7 +1044,52 @@ export default function ConsolePage() {
             </div>
           )}
 
-          {(tab === 'hub-optimization' || tab === 'hub-quotas' || tab === 'hub-maintenance' || tab === 'hub-support') && (
+          {(tab === 'hub-quotas' || tab === 'iam-quotas') && quotaReport && (
+            <div className="cl-quota-grid">
+              {[
+                {
+                  label: 'Deployments',
+                  used: quotaReport.usage.deployments,
+                  limit: quotaReport.limits.maxDeployments,
+                },
+                {
+                  label: 'CPU (vCPU at max scale)',
+                  used: quotaReport.usage.totalCpu,
+                  limit: quotaReport.limits.maxCpu,
+                },
+                {
+                  label: 'Memory (MB at max scale)',
+                  used: quotaReport.usage.totalMemoryMb,
+                  limit: quotaReport.limits.maxMemoryMb,
+                },
+                {
+                  label: 'Storage buckets',
+                  used: quotaReport.usage.buckets,
+                  limit: quotaReport.limits.maxBuckets,
+                },
+              ].map((row) => {
+                const pct = row.limit > 0 ? Math.min(100, Math.round((row.used / row.limit) * 100)) : 0
+                return (
+                  <div key={row.label} className="cl-quota-card">
+                    <div className="cl-quota-card-head">
+                      <strong>{row.label}</strong>
+                      <span className="gcp-muted">
+                        {row.used} / {row.limit}
+                      </span>
+                    </div>
+                    <div className="cl-quota-bar">
+                      <div className="cl-quota-bar-fill" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                )
+              })}
+              <p className="gcp-muted" style={{ marginTop: '1rem' }}>
+                Per-deployment max instances: {quotaReport.limits.maxInstances}. Quotas apply at enqueue time for deploys and buckets.
+              </p>
+            </div>
+          )}
+
+          {(tab === 'hub-optimization' || tab === 'hub-maintenance' || tab === 'hub-support') && (
             <div className="cl-gc-stub">
               <p>{SERVICE_LABELS[tab]} is on the roadmap. Deploy and monitor services from the Cloud Hub menu today.</p>
             </div>

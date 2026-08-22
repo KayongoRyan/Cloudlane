@@ -2736,6 +2736,39 @@ button {
   line-height: 1.5;
 }
 
+.cl-quota-grid {
+  display: grid;
+  gap: 1rem;
+  max-width: 42rem;
+}
+
+.cl-quota-card {
+  border: 1px solid var(--cl-stroke);
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
+  background: var(--cl-surface, #fff);
+}
+
+.cl-quota-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.65rem;
+}
+
+.cl-quota-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--cl-stroke);
+  overflow: hidden;
+}
+
+.cl-quota-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--cl-forest, #1b4332);
+}
+
 .cl-gc-recent-row {
   width: 100%;
   border: 0;

@@ -19,6 +19,7 @@ from routes.monitoring import router as monitoring_router
 from routes.vms import router as vms_router
 from routes.gateways import router as gateways_router
 from routes.gateway_internal import router as gateway_internal_router
+from routes.quota import router as quota_router
 from middleware.control_plane_gateway import (
     ApiVersionMiddleware,
     ControlPlaneRateLimitMiddleware,
@@ -70,6 +71,7 @@ app.include_router(billing_router, prefix='/api/billing', tags=['billing'])
 app.include_router(monitoring_router, prefix='/api/monitoring', tags=['monitoring'])
 app.include_router(vms_router, prefix='/api/vms', tags=['vms'])
 app.include_router(gateways_router, prefix='/api/gateways', tags=['gateways'])
+app.include_router(quota_router, prefix='/api/quota', tags=['quota'])
 app.include_router(gateway_internal_router, prefix='/internal/gateway', tags=['gateway-internal'])
 app.include_router(audit_logs_router, prefix='/api/audit-logs', tags=['audit-logs'])
 app.include_router(usage_metrics_router, prefix='/api/usage-metrics', tags=['usage-metrics'])

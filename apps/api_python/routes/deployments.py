@@ -7,6 +7,7 @@ import database as db
 from auth import AuthContext, authenticate_request, client_ip, require_scopes
 from config import get_settings
 from schemas import DeploymentCreate
+from services.quota import assert_deployment_allowed
 
 router = APIRouter()
 
@@ -46,9 +47,13 @@ async def create_deployment(
     if not tenant:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Tenant not found')
 
-    limits = tenant['limits']
-    if db.count_deployments(auth.tenant_id) >= limits['maxDeployments']:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Deployment limit reached for tenant')
+    min_instances = payload.minInstances if payload.minInstances is not None else 0
+    max_instances = payload.maxInstances if payload.maxInstances is not None else 3
+    cpu = payload.cpu if payload.cpu is not None else 0.5
+    memory = payload.memory if payload.memory is not None else 256
+
+    # Enforce count / CPU / memory / per-deploy instance caps before enqueue.
+    assert_deployment_allowed(auth.tenant_id, cpu, memory, max_instances)
 
     project = db.get_or_create_default_project(auth.tenant_id)
     if projectId:
@@ -62,9 +67,6 @@ async def create_deployment(
     public_url = f'https://{host}.{settings.base_domain}'
     k8s_namespace = f'tenant-{auth.tenant_id}'[:63]
     deployment_name = payload.name.replace(' ', '-').lower()
-    min_instances = payload.minInstances if payload.minInstances is not None else 0
-    max_instances = min(payload.maxInstances if payload.maxInstances is not None else 3, limits['maxInstances'])
-    cpu = payload.cpu if payload.cpu is not None else 0.5
 
     deployment = db.create_deployment({
         'tenantId': auth.tenant_id,
@@ -73,7 +75,7 @@ async def create_deployment(
         'slug': slug,
         'image': payload.image,
         'cpu': cpu,
-        'memory': payload.memory if payload.memory is not None else 256,
+        'memory': memory,
         'minInstances': min_instances,
         'maxInstances': max_instances,
         'status': 'provisioning',

@@ -11,11 +11,13 @@ from pymongo.database import Database
 
 from config import get_settings
 
+# Free-tier defaults must fit at least one default deploy (0.5 vCPU × 3 instances, 256 MB × 3).
 DEFAULT_TENANT_LIMITS = {
     'maxDeployments': 8,
-    'maxCpu': 1,
-    'maxMemoryMb': 512,
+    'maxCpu': 4,
+    'maxMemoryMb': 4096,
     'maxInstances': 3,
+    'maxBuckets': 5,
 }
 
 _client: MongoClient | None = None
@@ -82,6 +84,7 @@ def map_limits(raw: Any) -> dict[str, int]:
         'maxCpu': data.get('maxCpu', DEFAULT_TENANT_LIMITS['maxCpu']),
         'maxMemoryMb': data.get('maxMemoryMb', DEFAULT_TENANT_LIMITS['maxMemoryMb']),
         'maxInstances': data.get('maxInstances', DEFAULT_TENANT_LIMITS['maxInstances']),
+        'maxBuckets': data.get('maxBuckets', DEFAULT_TENANT_LIMITS['maxBuckets']),
     }
 
 
@@ -480,6 +483,29 @@ def count_deployments(tenant_id: str) -> int:
         **tenant_clause(tenant_id),
         '$or': [{'deletedAt': None}, {'deletedAt': {'$exists': False}}],
     })
+
+
+def count_buckets(tenant_id: str) -> int:
+    return col('buckets').count_documents(tenant_clause(tenant_id))
+
+
+def summarize_tenant_usage(tenant_id: str) -> dict[str, int | float]:
+    deployments = list_deployments(tenant_id)
+    total_cpu = 0.0
+    total_memory = 0
+    total_max_instances = 0
+    for deployment in deployments:
+        instances = int(deployment.get('maxInstances') or 0)
+        total_cpu += float(deployment.get('cpu') or 0) * instances
+        total_memory += int(deployment.get('memory') or 0) * instances
+        total_max_instances += instances
+    return {
+        'deployments': len(deployments),
+        'totalCpu': round(total_cpu, 3),
+        'totalMemoryMb': total_memory,
+        'totalMaxInstances': total_max_instances,
+        'buckets': count_buckets(tenant_id),
+    }
 
 
 def find_deployment_by_name(name: str, tenant_id: str) -> dict[str, Any] | None:
