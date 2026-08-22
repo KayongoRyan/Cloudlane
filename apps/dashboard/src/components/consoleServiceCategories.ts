@@ -892,7 +892,7 @@ export const CONSOLE_SERVICE_CATEGORIES: ServiceCategory[] = [
         description: 'Share Cloudlane resources with other accounts or organizations',
       },
       {
-        name: 'Secrets Manager',
+        name: 'Cloudlane Secrets Manager',
         description: 'Easily rotate, manage, and retrieve secrets throughout their lifecycle',
         consoleId: 'sec-secret-manager',
       },

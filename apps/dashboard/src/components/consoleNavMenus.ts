@@ -354,7 +354,7 @@ export const SERVICE_LABELS: Record<ServiceId, string> = {
   'sec-ca-service': 'Certificate Authority service',
   'sec-kms': 'Key Management',
   'sec-cert-manager': 'Certificate Manager',
-  'sec-secret-manager': 'Secret Manager',
+  'sec-secret-manager': 'Cloudlane Secrets Manager',
   'sec-console-access-policy': 'Console & APIs access Policy',
   'sec-enterprise-premium': 'Cloudlane Enterprise Premium',
   'sec-iap': 'Identity-Aware Proxy',
@@ -683,7 +683,7 @@ export const SUBMENU_SECTIONS: Partial<Record<ServiceId, SubMenuSection[]>> = {
         { id: 'sec-ca-service', label: 'Certificate Authority service' },
         { id: 'sec-kms', label: 'Key Management' },
         { id: 'sec-cert-manager', label: 'Certificate Manager' },
-        { id: 'sec-secret-manager', label: 'Secret Manager' },
+        { id: 'sec-secret-manager', label: 'Cloudlane Secrets Manager' },
       ],
     },
     {
