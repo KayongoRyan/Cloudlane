@@ -65,9 +65,14 @@ def tenant_clause(tenant_id: str) -> dict[str, Any]:
 
 
 def ref_str(value: Any) -> str:
-    if isinstance(value, ObjectId):
-        return value.hex
-    return str(value) if value is not None else ''
+    if value is None:
+        return ''
+    if type(value).__name__ == 'ObjectId':
+        try:
+            return value.binary.hex()
+        except AttributeError:
+            return str(value)
+    return str(value)
 
 
 def map_limits(raw: Any) -> dict[str, int]:

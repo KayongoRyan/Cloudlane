@@ -36,7 +36,9 @@ def _route_location_block(route: dict, deployment_url: str, gateway_id: str) -> 
         proxy_set_header X-Request-Id $request_id;
         proxy_set_header X-Cloudlane-Gateway-Id "{_nginx_escape(gateway_id)}";
         proxy_set_header X-Cloudlane-Route-Id "{_nginx_escape(route['id'])}";
-        proxy_pass {proxy_pass};
+        resolver 127.0.0.11 ipv6=off valid=30s;
+        set $upstream "{_nginx_escape(proxy_pass)}";
+        proxy_pass $upstream;
     }}
 """
 
@@ -89,9 +91,22 @@ def generate_deploy_preview(gateway: dict, routes: list[dict]) -> str:
     return generate_gateway_server_block(gateway, routes).strip()
 
 
+def _resolve_config_dir(configured: str) -> Path:
+    path = Path(configured)
+    if path.is_absolute():
+        return path
+    cwd = Path.cwd()
+    probe = cwd
+    while probe != probe.parent:
+        if (probe / 'docker-compose.yml').exists():
+            return probe / path
+        probe = probe.parent
+    return cwd / path
+
+
 def sync_gateway_configs() -> None:
     settings = get_settings()
-    config_dir = Path(settings.gateway_config_dir)
+    config_dir = _resolve_config_dir(settings.gateway_config_dir)
     config_dir.mkdir(parents=True, exist_ok=True)
 
     for existing in config_dir.glob('*.conf'):

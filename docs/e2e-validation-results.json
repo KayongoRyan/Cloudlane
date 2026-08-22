@@ -1,0 +1,8 @@
+{
+  "test-auth": "PASS email=e2e-1787431526888@example.com projects=1",
+  "test-deploy": "PASS status=running msg=Deployment is live",
+  "test-gateway": "PASS hostname=e2e-gw-1787431526888-13fc-default.gateway.cloudlane.run validate_no_key=401 validate_with_key=204 edge_no_key=200 conf_files=6 conf_ok=True auth_ok=True",
+  "test-metering": "PASS billing=True metrics=True count=2",
+  "test-rate-limit": "PASS smoke_429=False (threshold 1000rpm \u2014 429 optional at 50 reqs)",
+  "sign-off": "PASS all core E2E tests completed"
+}
