@@ -22,12 +22,25 @@ Do **not** use `npm run dev` — that was the legacy Node API.
 
 ### Netlify env vars
 
-- `DATABASE_URL` — MongoDB Atlas connection string
+- `DATABASE_URL` — MongoDB Atlas connection string (**use `mongodb+srv://` — TLS built-in**)
 - `JWT_SECRET` — auth signing secret
+- `ENVIRONMENT` — set to `production` (enables HSTS + requires Mongo TLS)
+- `SECRETS_MASTER_KEY` — optional Fernet root for secret vaults (else JWT_SECRET)
 
-Optional: `JWT_EXPIRE_MINUTES` = `1440`
+Optional: `JWT_EXPIRE_MINUTES` = `1440`, `FORCE_HTTPS=true`, `MONGO_TLS_REQUIRED=true`
 
 Build `DATABASE_URL` in the Atlas UI (**Connect → Drivers**): use your cluster hostname, database user, and password. URL-encode special characters in the password (e.g. `#` → `%23`). **Never commit the real connection string** — set it only in Netlify env vars and local `apps/api_python/.env` (gitignored).
+
+### Data encryption
+
+| Hop | Encryption |
+|---|---|
+| Browser → Netlify / Vercel | TLS 1.3 (platform) |
+| FastAPI responses | HSTS + security headers when HTTPS / `ENVIRONMENT=production` |
+| FastAPI → MongoDB Atlas | TLS (`mongodb+srv` or `?tls=true`) |
+| Secrets at rest | Fernet vaults; passwords bcrypt |
+
+Probe: `GET /health/encryption` on the API.
 
 After deploy, copy your site URL (e.g. `https://your-api.netlify.app`) and set on the **dashboard** (Vercel):
 

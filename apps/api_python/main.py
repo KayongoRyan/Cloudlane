@@ -30,6 +30,7 @@ from middleware.control_plane_gateway import (
     ControlPlaneRateLimitMiddleware,
     RequestIdMiddleware,
 )
+from middleware.security_headers import SecurityHeadersMiddleware
 
 settings = get_settings()
 
@@ -70,6 +71,7 @@ app.add_middleware(
 app.add_middleware(ControlPlaneRateLimitMiddleware)
 app.add_middleware(RequestIdMiddleware)
 app.add_middleware(ApiVersionMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(auth_router, prefix='/api/auth', tags=['auth'])
 app.include_router(deployments_router, prefix='/api/deployments', tags=['deployments'])

@@ -375,7 +375,9 @@ def get_db() -> Database:
     if _db is not None:
         return _db
     settings = get_settings()
-    url = to_direct_mongo_url(settings.database_url)
+    from services.encryption import ensure_mongo_tls_params, mongo_url_uses_tls
+
+    url = ensure_mongo_tls_params(to_direct_mongo_url(settings.database_url))
     if not url or not url.startswith('mongodb'):
         hint = (
             'Set DATABASE_URL in Netlify environment variables (MongoDB Atlas URI).'
@@ -385,6 +387,11 @@ def get_db() -> Database:
         raise RuntimeError(hint)
     if settings.is_netlify and 'localhost' in url:
         raise RuntimeError('DATABASE_URL cannot point to localhost on Netlify. Use MongoDB Atlas.')
+    if settings.require_mongo_tls and 'localhost' not in url and '127.0.0.1' not in url:
+        if not mongo_url_uses_tls(url):
+            raise RuntimeError(
+                'Production requires TLS to MongoDB. Use mongodb+srv:// or append tls=true / ssl=true.'
+            )
     _client = MongoClient(
         url,
         serverSelectionTimeoutMS=4000,

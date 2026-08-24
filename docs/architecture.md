@@ -307,6 +307,39 @@ Done: control-plane secrets can move from `.env` into encrypted Mongo `system_se
 
 ---
 
+## Data encryption (in transit + at rest)
+
+Maps the platform encryption diagram to Cloudlane’s actual hosts:
+
+```
+User
+  │  TLS 1.3 (browser)
+  ▼
+Cloudflare / Vercel / Netlify edge   ← diagram: Cloudflare edge (TLS 1.3, origin cert)
+  │  HTTPS to origin
+  ▼
+Control plane (FastAPI on Netlify)   ← diagram: ALB + AWS service
+  │  HSTS + security headers (SecurityHeadersMiddleware)
+  │  TLS 1.3 to Atlas (mongodb+srv / tls=true)
+  ▼
+MongoDB Atlas                        ← diagram: MongoDB
+```
+
+| Layer | Cloudlane | Status |
+|---|---|---|
+| Edge TLS | Vercel dashboard + Netlify API (platform TLS) | Live (host) |
+| Origin hardening | `SecurityHeadersMiddleware` — HSTS when HTTPS / production | Live |
+| Service → DB | `ensure_mongo_tls_params` + prod requires TLS | Live |
+| At rest (secrets) | Fernet tenant + ops vaults | Live |
+| At rest (passwords) | bcrypt | Live |
+| At rest (API keys) | SHA-256 hashes | Live |
+
+Check posture: `GET /health/encryption`
+
+Local docker Mongo may stay plaintext (`localhost`). Production / Netlify requires Atlas TLS.
+
+---
+
 ## Related docs
 
 - [DEPLOYMENT.md](./DEPLOYMENT.md) — Vercel dashboard + Netlify API hosting

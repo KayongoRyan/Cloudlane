@@ -107,7 +107,7 @@ Bearer JWT or `X-API-Key` (`cl_*` platform keys). Gateway consumer keys (`gw_*`)
 | `POST` | `/graphql` | JWT / API key (read subset) |
 | `GET` | `/api/billing`, `/api/monitoring`, `/api/quota` | JWT / API key |
 | `GET` | `/internal/gateway/validate` | Nginx `auth_request` (edge) |
-| `GET` | `/health` | public (no DB) |
+| `GET` | `/health`, `/health/encryption` | public (no DB) |
 
 `POST /api/api-keys` returns the plaintext key **once**. Register and deploy write `audit_logs`.
 

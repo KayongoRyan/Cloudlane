@@ -32,10 +32,31 @@ class Settings(BaseSettings):
     worker_poll_interval_seconds: int = 2
     provision_max_attempts: int = 3
     secrets_master_key: str = ''
+    # Data encryption / TLS posture
+    force_https: bool = False
+    mongo_tls_required: bool = False
+    hsts_max_age_seconds: int = 31536000
 
     @property
     def is_netlify(self) -> bool:
         return bool(os.getenv('NETLIFY') or os.getenv('AWS_LAMBDA_FUNCTION_NAME'))
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment.lower() in ('production', 'prod') or self.is_netlify
+
+    @property
+    def require_mongo_tls(self) -> bool:
+        """Atlas / production must use TLS; local docker mongo may stay plaintext."""
+        if self.mongo_tls_required:
+            return True
+        if self.is_production:
+            return True
+        return False
+
+    @property
+    def enable_hsts(self) -> bool:
+        return self.force_https or self.is_production
 
 
 def set_runtime_overrides(values: dict[str, str]) -> None:
