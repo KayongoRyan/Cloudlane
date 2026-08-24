@@ -400,7 +400,7 @@ MINIO_ENDPOINT=localhost:9010
 **Never commit Atlas URIs** — GitHub secret scanning flags `mongodb+srv` with credentials.
 
 ```bash
-docker compose up -d          # mongo, minio, redis, prometheus, grafana, gateway-proxy, provision-worker
+docker compose up -d          # mongo, minio, redis, managed-postgres/mysql, gateway-proxy, …
 npm install
 cd apps/api_python && pip install -r requirements.txt
 npm run dev                   # API :8001 + dashboard :3000 (uses python -m uvicorn)
@@ -411,7 +411,9 @@ npm run dev                   # API :8001 + dashboard :3000 (uses python -m uvic
 | FastAPI | 8001 |
 | Dashboard | 3000 |
 | gateway-proxy | 8080 |
-| MongoDB | 27017 |
+| MongoDB (control plane) | 27017 |
+| Managed Postgres (tenant RDS) | 5433 |
+| Managed MySQL (tenant RDS) | 3307 |
 | Redis | 6380 |
 | MinIO API / console | 9010 / 9011 |
 | Prometheus / Grafana | 9090 / 3002 |
@@ -458,18 +460,17 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 - [x] **Provider drivers** — `services/providers` (K8s compute, MinIO storage)
 - [x] **Secret Vaults** — tenant `/api/secrets` + ops vault `/api/ops/secrets` (Cloudlane secret migration)
 - [x] **Load Balancing** — `/api/load-balancers` + HTTP L7 on `gateway-proxy` (`infra/nginx/lbs`)
-- [x] **Managed DBs + GraphQL** — `/api/databases` stub + `/graphql` read API
+- [x] **Managed DBs + GraphQL** — real Postgres/MySQL on compose + `/graphql` read API
 - [ ] Scale-to-zero (KEDA)
 - [ ] IremboPay production charges
 
 ### Phase 2 — Polish
 - Audit log viewer, alerting, Loki
-- Real LB / RDS data-plane (beyond metadata stubs)
-- Ops vault for JWT/DB/MinIO control-plane secrets
+- LB L4/TLS; SQL backups / dedicated instances
 - Full GraphQL schema
 
 ### Phase 3 — Broader surface
-- Managed Postgres for customers, secrets vault, custom domains, orgs/IAM depth
+- Custom domains, orgs/IAM depth, VPC/security groups
 
 ## Design principles
 
@@ -480,4 +481,4 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 
 ## Status
 
-V1 control plane in **FastAPI** + **Next.js console**. API Gateway, async provisioning, quotas, provider drivers, **secret vaults**, **HTTP L7 load balancers**, **managed DB stubs**, and a thin **GraphQL** read API are live. Next: LB L4/TLS, real RDS, KEDA, IremboPay — see [docs/architecture.md](docs/architecture.md).
+V1 control plane in **FastAPI** + **Next.js console**. API Gateway, async provisioning, quotas, provider drivers, **secret vaults**, **HTTP L7 load balancers**, **managed Postgres/MySQL**, and a thin **GraphQL** read API are live. Next: LB L4/TLS, KEDA, IremboPay — see [docs/architecture.md](docs/architecture.md).

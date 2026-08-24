@@ -1350,7 +1350,10 @@ export default function ConsolePage() {
                 <input type="number" min={5} max={1024} value={dbForm.sizeGb} onChange={(e) => setDbForm({ ...dbForm, sizeGb: parseInt(e.target.value, 10) || 10 })} />
                 <button type="submit" className="gcp-btn-primary gcp-btn-compact" disabled={busy}>Create instance</button>
               </form>
-              <p className="gcp-muted">Managed DB metadata (stub). Connection string shown once on reveal — no real RDS yet.</p>
+              <p className="gcp-muted">
+                Real Postgres (:5433) / MySQL (:3307) via compose. Connection string encrypted at rest — Reveal once to copy.
+                Control plane stays on MongoDB.
+              </p>
               <div className="gcp-table">
                 <div className="gcp-table-row gcp-table-head cl-table-4">
                   <span>Name</span><span>Engine</span><span>Endpoint</span><span>Status</span>
@@ -1490,8 +1493,8 @@ export default function ConsolePage() {
           {showSqlGetStarted && (
             <div className="cl-gc-stub">
               <p>
-                Cloud SQL instances are available under Instances. Open that tab to provision
-                Postgres/MySQL metadata (stub provider). Real RDS hosting is next.
+                Cloud SQL instances provision real Postgres (:5433) / MySQL (:3307) databases.
+                Open Instances to create one — connection strings are encrypted; Mongo stays the control plane.
               </p>
               <button type="button" className="gcp-btn-primary gcp-btn-compact" onClick={() => openService('sql-instances')}>
                 Go to Instances

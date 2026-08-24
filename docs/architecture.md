@@ -120,7 +120,7 @@ Replace a single “customer-facing API” box with two distinct entry points:
 | GraphQL | `/graphql` | `routes/graphql.py` | Live (read subset) |
 | Secrets | `/api/secrets` | `routes/secrets.py` | Live |
 | Load balancers | `/api/load-balancers` | `routes/load_balancers.py` | Live (HTTP L7 on gateway-proxy) |
-| Managed DBs | `/api/databases` | `routes/databases.py` | Live (stub provider) |
+| Managed DBs | `/api/databases` | `routes/databases.py` | Live (real Postgres/MySQL on compose) |
 | VMs | `/api/vms` | `routes/vms.py` | Stub |
 | API Gateway admin | `/api/gateways` | `routes/gateways.py` | Live |
 | Usage metrics | `/api/usage-metrics` | `routes/usage_metrics.py` | Live |
@@ -209,9 +209,9 @@ Platform keys default to `deploy`, `read`. Gateway admin accepts `gateway:read` 
 | Kubernetes | `services/providers/k8s.py` → `kubernetes.py` | Optional; set `KUBECONFIG` |
 | Secret vault | `services/providers/secrets.py` (Fernet) | Encrypted in Mongo `secrets` |
 | Load balancer | `services/providers/load_balancer.py` + `services/lb_config.py` | HTTP L7 on `gateway-proxy`; DNS `*.lb.cloudlane.run`; TCP metadata-only |
-| Managed DB | `services/providers/database.py` | Metadata stub; `*.db.cloudlane.run` |
+| Managed DB | `services/providers/database.py` | Real DBs on `managed-postgres` (:5433) / `managed-mysql` (:3307); per-tenant DB+user |
 | VMs (EC2-style) | `routes/vms.py` | Stub only |
-| RDS / managed DB | Console `sql-instances` + `/api/databases` | Stub provider |
+| RDS / managed DB | Console `sql-instances` + `/api/databases` | Live local data-plane |
 | Load balancer | Console Load Balancing + `/api/load-balancers` | Live L7 (Host → `:8080`) |
 | Deployment ingress | K8s ingress via compute provider | When cluster connected |
 
@@ -227,6 +227,8 @@ Default env (see `apps/api_python/.env.example`):
 | `GATEWAY_CONFIG_DIR` | `infra/nginx/gateways` |
 | `LB_BASE_DOMAIN` | `lb.cloudlane.run` |
 | `LB_CONFIG_DIR` | `infra/nginx/lbs` |
+| `MANAGED_POSTGRES_PORT` | `5433` |
+| `MANAGED_MYSQL_PORT` | `3307` |
 
 Host ports `6380` / `9010` avoid conflicts when another Redis or MinIO already owns `6379` / `9000`.
 
@@ -242,7 +244,7 @@ Host ports `6380` / `9010` avoid conflicts when another Redis or MinIO already o
 | `gateways`, `gateway_routes`, `gateway_keys` | API Gateway product |
 | `secrets` | Encrypted tenant secrets (Secret Manager) |
 | `load_balancers` | General LB product; HTTP/HTTPS synced to `infra/nginx/lbs` |
-| `database_instances` | Managed DB product (metadata stub) |
+| `database_instances` | Managed SQL product (real PG/MySQL; conn string Fernet-encrypted) |
 | `api_keys` | Platform keys for dashboard / CLI (`cl_*`) |
 | `buckets` | Object storage metadata |
 | `vms` | VM metadata (stub) |
@@ -259,19 +261,19 @@ Host ports `6380` / `9010` avoid conflicts when another Redis or MinIO already o
 | Customer-facing REST API | FastAPI control plane + gateway admin API |
 | Auth + Keys | JWT, platform keys, gateway consumer keys |
 | Deployments | CRUD + optional K8s |
-| Resources | Projects, buckets, gateways; VMs stub; no RDS |
+| Resources | Projects, buckets, gateways; VMs stub; managed SQL on compose |
 | Usage / Bills | Metrics + basic billing |
 | Terraform / IaC | Missing |
 | Async job queue | Mongo `provision_jobs` + `provision-worker` container |
 | Quota manager | Live — CPU/memory at max scale, deploy count, buckets/secrets/LBs/DBs; console Hub Quotas |
 | Rate limiter | Redis on control plane + gateway edge |
-| Provider drivers | `services/providers` — K8s, MinIO, secrets, LB L7 nginx, DB stub |
+| Provider drivers | `services/providers` — K8s, MinIO, secrets, LB L7 nginx, managed SQL |
 | EC2 / VMs | API stub |
 | K8s | Real when cluster configured |
 | S3 | MinIO |
 | Load balancer | HTTP L7 on gateway-proxy (`infra/nginx/lbs`); API Gateway remains for keyed APIs |
 | Secret vaults | Live — Fernet-encrypted tenant secrets |
-| RDS | Metadata API + console (stub) |
+| RDS | Live locally — shared Postgres/MySQL engines, isolated DB+user per instance |
 | GraphQL | Live thin read API at `/graphql` |
 
 ---
@@ -282,13 +284,13 @@ Host ports `6380` / `9010` avoid conflicts when another Redis or MinIO already o
 2. ~~**Quota service**~~ — done (`services/quota.py`, `/api/quota`, console Hub Quotas)
 3. ~~**Provider driver interface**~~ — done (`services/providers/` for compute + object storage)
 4. ~~**General load balancer product**~~ — done (`/api/load-balancers`, console Load Balancing; HTTP L7 on gateway-proxy)
-5. ~~**RDS / GraphQL**~~ — done (`/api/databases` stub + `/graphql` read API)
+5. ~~**RDS / GraphQL**~~ — done (real managed Postgres/MySQL on compose + `/graphql` read API)
 6. ~~**Secret Vaults**~~ — done (tenant `/api/secrets` + ops `/api/ops/secrets` Cloudlane secret migration)
 
 ### Still open
 
 - Real LB L4 / TCP (`nginx stream`) and TLS terminate for HTTPS
-- Real managed Postgres/MySQL (beyond metadata stub)
+- Per-instance SQL containers / disk quotas / automated backups (beyond shared engines)
 - Full GraphQL schema (current `/graphql` is a thin query selector)
 - Scale-to-zero (KEDA)
 - IremboPay production charges

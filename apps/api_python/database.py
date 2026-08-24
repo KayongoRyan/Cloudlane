@@ -258,6 +258,7 @@ def map_database_instance(doc: dict[str, Any], *, include_connection: bool = Fal
         'host': doc.get('host'),
         'port': doc.get('port'),
         'endpoint': doc.get('endpoint'),
+        'dbName': doc.get('dbName'),
         'username': doc.get('username'),
         'status': doc.get('status', 'available'),
         'statusMessage': doc.get('statusMessage'),
@@ -265,7 +266,15 @@ def map_database_instance(doc: dict[str, Any], *, include_connection: bool = Fal
         'updatedAt': doc.get('updatedAt'),
     }
     if include_connection:
-        out['connectionString'] = doc.get('connectionString')
+        if doc.get('connectionStringCiphertext'):
+            from services.secrets_crypto import decrypt_secret
+            try:
+                out['connectionString'] = decrypt_secret(doc['connectionStringCiphertext'])
+            except Exception:
+                out['connectionString'] = None
+        else:
+            # Legacy stub docs stored plaintext
+            out['connectionString'] = doc.get('connectionString')
     return out
 
 
@@ -1287,6 +1296,11 @@ def find_database_instance_by_id(
 
 def create_database_instance(input_data: dict[str, Any]) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
+    connection_string = input_data.get('connectionString')
+    ciphertext = input_data.get('connectionStringCiphertext')
+    if connection_string and not ciphertext:
+        from services.secrets_crypto import encrypt_secret
+        ciphertext = encrypt_secret(connection_string)
     doc = {
         'tenantId': oid_or_raw(input_data['tenantId']),
         'projectId': oid_or_raw(input_data['projectId']) if input_data.get('projectId') else None,
@@ -1297,8 +1311,9 @@ def create_database_instance(input_data: dict[str, Any]) -> dict[str, Any]:
         'host': input_data.get('host'),
         'port': input_data.get('port'),
         'endpoint': input_data.get('endpoint'),
+        'dbName': input_data.get('dbName'),
         'username': input_data.get('username'),
-        'connectionString': input_data.get('connectionString'),
+        'connectionStringCiphertext': ciphertext,
         'status': input_data.get('status', 'available'),
         'statusMessage': input_data.get('statusMessage'),
         'createdAt': now,

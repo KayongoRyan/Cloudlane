@@ -29,6 +29,15 @@ class Settings(BaseSettings):
     gateway_config_dir: str = 'infra/nginx/gateways'
     lb_config_dir: str = 'infra/nginx/lbs'
     lb_base_domain: str = 'lb.cloudlane.run'
+    # Managed SQL product (tenant RDS) — not the Mongo control plane
+    managed_postgres_host: str = 'localhost'
+    managed_postgres_port: int = 5433
+    managed_postgres_admin_user: str = 'cloudlane_rds'
+    managed_postgres_admin_password: str = 'cloudlane-rds'
+    managed_mysql_host: str = 'localhost'
+    managed_mysql_port: int = 3307
+    managed_mysql_admin_user: str = 'root'
+    managed_mysql_admin_password: str = 'cloudlane-rds'
     control_plane_rate_limit_rpm: int = 1000
     gateway_default_rate_limit_rpm: int = 1000
     worker_poll_interval_seconds: int = 2

@@ -31,6 +31,10 @@ Optional: `JWT_EXPIRE_MINUTES` = `1440`, `FORCE_HTTPS=true`, `MONGO_TLS_REQUIRED
 
 Build `DATABASE_URL` in the Atlas UI (**Connect → Drivers**): use your cluster hostname, database user, and password. URL-encode special characters in the password (e.g. `#` → `%23`). **Never commit the real connection string** — set it only in Netlify env vars and local `apps/api_python/.env` (gitignored).
 
+### Managed SQL (tenant product)
+
+Local `docker compose` runs **managed-postgres** (`:5433`) and **managed-mysql** (`:3307`). Creating a Cloud SQL instance provisions a real database + user there; connection strings are Fernet-encrypted in Mongo. This does **not** replace Mongo (control plane). Netlify/production needs reachable `MANAGED_*` hosts if you expose the product there.
+
 ### Data encryption
 
 | Hop | Encryption |

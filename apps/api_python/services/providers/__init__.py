@@ -1,5 +1,9 @@
 from services.providers.base import ComputeProvider, ObjectStorageProvider
-from services.providers.database import StubDatabaseProvider, get_database_provider
+from services.providers.database import (
+    LocalManagedDatabaseProvider,
+    StubDatabaseProvider,
+    get_database_provider,
+)
 from services.providers.k8s import KubernetesComputeProvider, get_compute_provider
 from services.providers.load_balancer import (
     NginxLoadBalancerProvider,
@@ -17,6 +21,7 @@ __all__ = [
     'LocalSecretVaultProvider',
     'NginxLoadBalancerProvider',
     'StubLoadBalancerProvider',
+    'LocalManagedDatabaseProvider',
     'StubDatabaseProvider',
     'get_compute_provider',
     'get_object_storage_provider',

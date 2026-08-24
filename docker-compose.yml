@@ -56,6 +56,39 @@ services:
     volumes:
       - cloudlane_redis_data:/data
 
+  # Tenant managed SQL (RDS product) — separate from control-plane Mongo
+  managed-postgres:
+    image: postgres:16-alpine
+    container_name: cloudlane-managed-postgres
+    ports:
+      - "${MANAGED_POSTGRES_PORT:-5433}:5432"
+    environment:
+      POSTGRES_USER: ${MANAGED_POSTGRES_ADMIN_USER:-cloudlane_rds}
+      POSTGRES_PASSWORD: ${MANAGED_POSTGRES_ADMIN_PASSWORD:-cloudlane-rds}
+      POSTGRES_DB: postgres
+    volumes:
+      - cloudlane_managed_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $$POSTGRES_USER']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  managed-mysql:
+    image: mysql:8.0
+    container_name: cloudlane-managed-mysql
+    ports:
+      - "${MANAGED_MYSQL_PORT:-3307}:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MANAGED_MYSQL_ADMIN_PASSWORD:-cloudlane-rds}
+    volumes:
+      - cloudlane_managed_mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '-h', '127.0.0.1', '-uroot', '-p$$MYSQL_ROOT_PASSWORD']
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
   gateway-proxy:
     image: nginx:1.27-alpine
     container_name: cloudlane-gateway-proxy
@@ -95,3 +128,5 @@ volumes:
   cloudlane_prometheus_data:
   cloudlane_grafana_data:
   cloudlane_redis_data:
+  cloudlane_managed_postgres_data:
+  cloudlane_managed_mysql_data:
