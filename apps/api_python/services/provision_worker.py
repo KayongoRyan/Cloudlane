@@ -17,6 +17,13 @@ def process_job(job: dict) -> None:
         db.update_deployment_status(deployment_id, 'provisioning', 'Worker is provisioning resources')
         provision_deployment(job)
         db.complete_provision_job(job_id, 'succeeded')
+        deployment = db.find_deployment_by_id(deployment_id, tenant_id)
+        if deployment and deployment.get('status') == 'running' and deployment.get('publicUrl'):
+            try:
+                from services.lb_config import sync_lb_configs
+                sync_lb_configs()
+            except Exception as sync_exc:
+                print(f'lb config sync after provision failed: {sync_exc}')
         db.write_audit_log({
             'tenantId': tenant_id,
             'userId': None,

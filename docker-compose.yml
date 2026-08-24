@@ -64,6 +64,7 @@ services:
     volumes:
       - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./infra/nginx/gateways:/etc/nginx/gateways:ro
+      - ./infra/nginx/lbs:/etc/nginx/lbs:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:
@@ -77,10 +78,12 @@ services:
     volumes:
       - ./apps/api_python:/app
       - ./infra/nginx/gateways:/app/infra/nginx/gateways
+      - ./infra/nginx/lbs:/app/infra/nginx/lbs
     environment:
       DATABASE_URL: mongodb://cloudlane:${MONGO_PASSWORD:-cloudlane}@mongo:27017/cloudlane?authSource=admin
       BASE_DOMAIN: ${BASE_DOMAIN:-cloudlane.run}
       GATEWAY_CONFIG_DIR: infra/nginx/gateways
+      LB_CONFIG_DIR: infra/nginx/lbs
       WORKER_POLL_INTERVAL: ${WORKER_POLL_INTERVAL:-2}
       PROVISION_MAX_ATTEMPTS: ${PROVISION_MAX_ATTEMPTS:-3}
     depends_on:

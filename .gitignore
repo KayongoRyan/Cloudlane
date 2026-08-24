@@ -52,4 +52,8 @@ coverage/
 # Local database data (never commit)
 .postgres/
 *.pid
+
+# Generated nginx edge configs
+infra/nginx/lbs/*.conf
+!infra/nginx/lbs/.gitkeep
 ```

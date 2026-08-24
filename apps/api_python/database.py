@@ -1080,6 +1080,15 @@ def list_all_active_gateways() -> list[dict[str, Any]]:
     return [map_gateway(doc) for doc in docs]
 
 
+def list_all_active_load_balancers() -> list[dict[str, Any]]:
+    """Active HTTP/HTTPS LBs for nginx data-plane sync (TCP is metadata-only)."""
+    docs = col('load_balancers').find({
+        'status': 'active',
+        'protocol': {'$in': ['HTTP', 'HTTPS']},
+    }).sort('createdAt', -1)
+    return [map_load_balancer(doc) for doc in docs]
+
+
 def create_provision_job(input_data: dict[str, Any]) -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     doc = {

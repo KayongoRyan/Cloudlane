@@ -122,3 +122,5 @@ def sync_gateway_configs() -> None:
         path.write_text(content + '\n', encoding='utf-8')
 
     print(f'Synced gateway configs to {config_dir.resolve()}')
+    from services.nginx_reload import reload_gateway_proxy
+    reload_gateway_proxy()

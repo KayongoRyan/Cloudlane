@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     gateway_base_domain: str = 'gateway.cloudlane.run'
     redis_url: str = 'redis://localhost:6380/0'
     gateway_config_dir: str = 'infra/nginx/gateways'
+    lb_config_dir: str = 'infra/nginx/lbs'
+    lb_base_domain: str = 'lb.cloudlane.run'
     control_plane_rate_limit_rpm: int = 1000
     gateway_default_rate_limit_rpm: int = 1000
     worker_poll_interval_seconds: int = 2

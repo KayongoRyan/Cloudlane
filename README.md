@@ -369,7 +369,7 @@ cloudlane/
 │   ├── cli/             # `cloudlane` CLI
 │   └── shared/          # Shared TypeScript types
 ├── infra/
-│   ├── nginx/           # gateway-proxy base + gateways/*.conf
+│   ├── nginx/           # gateway-proxy base + gateways/*.conf + lbs/*.conf
 │   └── prometheus/
 ├── docs/
 │   ├── architecture.md  # dual-gateway model, layers, status
@@ -457,7 +457,7 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 - [x] **Quota service** — CPU/memory at max scale, deploy count, buckets; `GET /api/quota` + Hub Quotas UI
 - [x] **Provider drivers** — `services/providers` (K8s compute, MinIO storage)
 - [x] **Secret Vaults** — tenant `/api/secrets` + ops vault `/api/ops/secrets` (Cloudlane secret migration)
-- [x] **Load Balancing** — `/api/load-balancers` + console (stub data-plane)
+- [x] **Load Balancing** — `/api/load-balancers` + HTTP L7 on `gateway-proxy` (`infra/nginx/lbs`)
 - [x] **Managed DBs + GraphQL** — `/api/databases` stub + `/graphql` read API
 - [ ] Scale-to-zero (KEDA)
 - [ ] IremboPay production charges
@@ -480,4 +480,4 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 
 ## Status
 
-V1 control plane in **FastAPI** + **Next.js console**. API Gateway, async provisioning, quotas, provider drivers, **secret vaults**, **load balancers**, **managed DB stubs**, and a thin **GraphQL** read API are live. Next: real LB/RDS data-plane, KEDA scale-to-zero, IremboPay prod — see [docs/architecture.md](docs/architecture.md).
+V1 control plane in **FastAPI** + **Next.js console**. API Gateway, async provisioning, quotas, provider drivers, **secret vaults**, **HTTP L7 load balancers**, **managed DB stubs**, and a thin **GraphQL** read API are live. Next: LB L4/TLS, real RDS, KEDA, IremboPay — see [docs/architecture.md](docs/architecture.md).

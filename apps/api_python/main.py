@@ -46,7 +46,9 @@ async def lifespan(_app: FastAPI):
             if applied:
                 print(f'Applied ops vault secrets: {", ".join(applied)}')
             from services.gateway_config import sync_gateway_configs
+            from services.lb_config import sync_lb_configs
             sync_gateway_configs()
+            sync_lb_configs()
         except Exception as exc:
             print(f'Database not ready at startup: {exc}')
     yield

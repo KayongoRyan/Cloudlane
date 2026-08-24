@@ -3,10 +3,18 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 import database as db
 from auth import AuthContext, authenticate_request, client_ip, require_scopes
 from schemas import LoadBalancerCreate, LoadBalancerUpdate
+from services.lb_config import sync_lb_configs
 from services.providers import get_load_balancer_provider
 from services.quota import assert_load_balancer_allowed
 
 router = APIRouter()
+
+
+def _sync_configs() -> None:
+    try:
+        sync_lb_configs()
+    except Exception as exc:
+        print(f'lb config sync failed: {exc}')
 
 
 @router.get('/')
@@ -64,6 +72,7 @@ async def create_load_balancer(
         'changes': {'name': name, 'dnsName': lb.get('dnsName')},
         'ipAddress': client_ip(request),
     })
+    _sync_configs()
     return {'loadBalancer': lb}
 
 
@@ -91,6 +100,7 @@ async def update_load_balancer(
     lb = db.update_load_balancer(lb_id, auth.tenant_id, updates)
     if not lb:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Load balancer not found')
+    _sync_configs()
     return {'loadBalancer': lb}
 
 
@@ -111,4 +121,5 @@ async def delete_load_balancer(
         'resourceId': lb_id,
         'ipAddress': client_ip(request),
     })
+    _sync_configs()
     return None
