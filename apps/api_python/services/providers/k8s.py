@@ -35,6 +35,43 @@ class KubernetesComputeProvider:
     ) -> None:
         kubernetes_service.create_ingress(namespace, name, service_name, host, port)
 
+    def create_scaled_object(
+        self,
+        namespace: str,
+        name: str,
+        deployment_name: str,
+        min_replicas: int,
+        max_replicas: int,
+    ) -> None:
+        kubernetes_service.create_scaled_object(
+            namespace, name, deployment_name, min_replicas, max_replicas
+        )
+
+    def create_http_scaled_object(
+        self,
+        namespace: str,
+        name: str,
+        deployment_name: str,
+        service_name: str,
+        host_fqdn: str,
+        port: int,
+        min_replicas: int,
+        max_replicas: int,
+    ) -> None:
+        kubernetes_service.create_http_scaled_object(
+            namespace,
+            name,
+            deployment_name,
+            service_name,
+            host_fqdn,
+            port,
+            min_replicas,
+            max_replicas,
+        )
+
+    def delete_scaled_objects(self, namespace: str, name: str) -> None:
+        kubernetes_service.delete_scaled_objects(namespace, name)
+
 
 def get_compute_provider() -> KubernetesComputeProvider:
     return KubernetesComputeProvider()

@@ -241,7 +241,7 @@ export default function ConsolePage() {
   const [projectId, setProjectId] = useState<string>('')
   const [error, setError] = useState('')
   const [newKey, setNewKey] = useState<string | null>(null)
-  const [deployForm, setDeployForm] = useState({ name: '', image: '', port: 8080 })
+  const [deployForm, setDeployForm] = useState({ name: '', image: '', port: 8080, minInstances: 0, maxInstances: 3 })
   const [projectName, setProjectName] = useState('')
   const [bucketName, setBucketName] = useState('')
   const [vmForm, setVmForm] = useState({ name: '', cpu: 1, memoryMb: 512 })
@@ -426,7 +426,7 @@ export default function ConsolePage() {
     try {
       const q = projectId ? `?projectId=${projectId}` : ''
       await apiSend(`/api/deployments${q}`, 'POST', deployForm)
-      setDeployForm({ name: '', image: '', port: 8080 })
+      setDeployForm({ name: '', image: '', port: 8080, minInstances: 0, maxInstances: 3 })
       await mutateDeps()
       await mutateMonitoring()
     } catch (err: unknown) {
@@ -888,8 +888,27 @@ export default function ConsolePage() {
                 <input required placeholder="Service name" value={deployForm.name} onChange={(e) => setDeployForm({ ...deployForm, name: e.target.value })} />
                 <input required placeholder="Image" value={deployForm.image} onChange={(e) => setDeployForm({ ...deployForm, image: e.target.value })} />
                 <input type="number" required value={deployForm.port} onChange={(e) => setDeployForm({ ...deployForm, port: parseInt(e.target.value, 10) || 8080 })} />
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  title="minInstances (0 = scale-to-zero)"
+                  value={deployForm.minInstances}
+                  onChange={(e) => setDeployForm({ ...deployForm, minInstances: Math.max(0, parseInt(e.target.value, 10) || 0) })}
+                />
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  title="maxInstances"
+                  value={deployForm.maxInstances}
+                  onChange={(e) => setDeployForm({ ...deployForm, maxInstances: Math.max(1, parseInt(e.target.value, 10) || 3) })}
+                />
                 <button type="submit" className="gcp-btn-primary gcp-btn-compact" disabled={busy}>Deploy</button>
               </form>
+              <p className="gcp-muted">
+                min/max instances — default 0→3. KEDA ScaledObject on cluster when enabled; HTTP add-on for wake-from-zero (see docs/KEDA.md).
+              </p>
               <div className="gcp-table">
                 <div className="gcp-table-row gcp-table-head">
                   <span>Name</span><span>Image</span><span>URL</span><span>Status</span>

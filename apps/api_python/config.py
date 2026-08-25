@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     worker_poll_interval_seconds: int = 2
     provision_max_attempts: int = 3
     secrets_master_key: str = ''
+    # KEDA scale-to-zero / autoscaling (requires KEDA on the target cluster)
+    keda_enabled: bool = True
+    keda_http_addon_enabled: bool = False
+    keda_cooldown_seconds: int = 300
+    keda_cpu_threshold: str = '70'
     # Data encryption / TLS posture
     force_https: bool = False
     mongo_tls_required: bool = False

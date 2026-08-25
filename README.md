@@ -424,7 +424,8 @@ Run the worker separately (or rely on compose `provision-worker`):
 cd apps/api_python && python worker.py
 ```
 
-Optional: set `KUBECONFIG` for real K8s provisioning; without it deployments stay `pending`.
+Optional: set `KUBECONFIG` for real K8s provisioning; without it deployments stay `pending`.  
+For autoscaling / scale-to-zero, install KEDA on the cluster — [docs/KEDA.md](docs/KEDA.md).
 
 Dashboard on localhost hits `:8001`; production hits the Netlify API.
 
@@ -461,7 +462,7 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 - [x] **Secret Vaults** — tenant `/api/secrets` + ops vault `/api/ops/secrets` (Cloudlane secret migration)
 - [x] **Load Balancing** — `/api/load-balancers` + HTTP L7 on `gateway-proxy` (`infra/nginx/lbs`)
 - [x] **Managed DBs + GraphQL** — real Postgres/MySQL on compose + `/graphql` read API
-- [ ] Scale-to-zero (KEDA)
+- [x] **Scale-to-zero (KEDA)** — ScaledObject on provision; optional HTTP add-on (see docs/KEDA.md)
 - [ ] IremboPay production charges
 
 ### Phase 2 — Polish
@@ -481,4 +482,4 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 
 ## Status
 
-V1 control plane in **FastAPI** + **Next.js console**. API Gateway, async provisioning, quotas, provider drivers, **secret vaults**, **HTTP L7 load balancers**, **managed Postgres/MySQL**, and a thin **GraphQL** read API are live. Next: LB L4/TLS, KEDA, IremboPay — see [docs/architecture.md](docs/architecture.md).
+V1 control plane in **FastAPI** + **Next.js console**. API Gateway, async provisioning, quotas, provider drivers, **secret vaults**, **HTTP L7 load balancers**, **managed Postgres/MySQL**, **KEDA scale-to-zero**, and a thin **GraphQL** read API are live. Next: LB L4/TLS, IremboPay — see [docs/architecture.md](docs/architecture.md).

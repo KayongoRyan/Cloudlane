@@ -33,6 +33,29 @@ class ComputeProvider(Protocol):
         port: int,
     ) -> None: ...
 
+    def create_scaled_object(
+        self,
+        namespace: str,
+        name: str,
+        deployment_name: str,
+        min_replicas: int,
+        max_replicas: int,
+    ) -> None: ...
+
+    def create_http_scaled_object(
+        self,
+        namespace: str,
+        name: str,
+        deployment_name: str,
+        service_name: str,
+        host_fqdn: str,
+        port: int,
+        min_replicas: int,
+        max_replicas: int,
+    ) -> None: ...
+
+    def delete_scaled_objects(self, namespace: str, name: str) -> None: ...
+
 
 @runtime_checkable
 class ObjectStorageProvider(Protocol):

@@ -184,7 +184,7 @@ Default domain: `gateway.cloudlane.run` (see `GATEWAY_BASE_DOMAIN` in `config.py
 |---|---|---|
 | Tenant scoping | `tenantId` on all Mongo docs; `database.py` `tenant_clause()` | Live |
 | K8s namespace isolation | Per-tenant namespace in `deployments.py` | When `KUBECONFIG` set |
-| Kubernetes provisioning | `services/kubernetes.py` — namespace, deployment, service, ingress | Optional |
+| Kubernetes provisioning | `services/kubernetes.py` — namespace, deployment, service, ingress, KEDA ScaledObject | Optional |
 | Async provision worker | `worker.py`, `services/provision_worker.py`, `provision_jobs` collection | Live |
 | Quota | `services/quota.py` — CPU×maxInstances, memory, deploy count, buckets; `GET /api/quota` | Live |
 | Rate limiting | `services/redis_client.py` | Live |
@@ -292,8 +292,11 @@ Host ports `6380` / `9010` avoid conflicts when another Redis or MinIO already o
 - Real LB L4 / TCP (`nginx stream`) and TLS terminate for HTTPS
 - Per-instance SQL containers / disk quotas / automated backups (beyond shared engines)
 - Full GraphQL schema (current `/graphql` is a thin query selector)
-- Scale-to-zero (KEDA)
 - IremboPay production charges
+
+### KEDA scale-to-zero
+
+Done when cluster has KEDA installed: provision creates `ScaledObject` (CPU, min↔max). `minInstances: 0` is kept (no longer forced to 1). Optional `HTTPScaledObject` when `KEDA_HTTP_ADDON_ENABLED=true`. See [docs/KEDA.md](KEDA.md).
 
 ### Ops vault (Cloudlane secret migration)
 

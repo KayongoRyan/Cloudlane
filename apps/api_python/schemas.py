@@ -41,8 +41,8 @@ class DeploymentCreate(BaseModel):
     port: int = Field(..., ge=1, le=65535)
     cpu: float | None = None
     memory: int | None = None
-    minInstances: int | None = None
-    maxInstances: int | None = None
+    minInstances: int | None = Field(default=None, ge=0, le=100)
+    maxInstances: int | None = Field(default=None, ge=1, le=100)
 
 
 class ApiKeyCreate(BaseModel):

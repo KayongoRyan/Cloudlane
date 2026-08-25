@@ -96,6 +96,7 @@ async def create_deployment(
             'k8sNamespace': k8s_namespace,
             'host': host,
             'minInstances': min_instances,
+            'maxInstances': max_instances,
             'cpu': cpu,
         },
     })
@@ -125,8 +126,24 @@ async def delete_deployment(
     auth: AuthContext = Depends(authenticate_request),
 ):
     require_scopes(auth, 'deploy')
+    existing = db.find_deployment_by_id(deployment_id, auth.tenant_id)
+    if not existing:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Deployment not found')
+
     if not db.soft_delete_deployment(deployment_id, auth.tenant_id):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Deployment not found')
+
+    # Best-effort KEDA cleanup (cluster objects may outlive soft-delete)
+    try:
+        from services.providers import get_compute_provider
+        compute = get_compute_provider()
+        ns = existing.get('k8sNamespace')
+        name = existing.get('name')
+        if compute.is_ready() and ns and name:
+            compute.delete_scaled_objects(ns, name)
+    except Exception as exc:
+        print(f'keda cleanup on delete failed: {exc}')
+
     db.write_audit_log({
         'tenantId': auth.tenant_id,
         'userId': auth.user_id,
