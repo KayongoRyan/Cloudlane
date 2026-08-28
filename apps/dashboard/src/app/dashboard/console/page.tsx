@@ -147,6 +147,9 @@ interface Invoice {
   currency: string
   status: string
   createdAt?: string
+  irembopayPaymentLinkUrl?: string
+  irembopayInvoiceNumber?: string
+  irembopayPaymentStatus?: string
 }
 
 interface MonitoringSummary {
@@ -256,7 +259,7 @@ export default function ConsolePage() {
   const [routeForm, setRouteForm] = useState({ method: 'GET', path: '/v1/', targetDeploymentId: '', stage: 'prod' })
   const [newGatewayKey, setNewGatewayKey] = useState<string | null>(null)
   const [deployConfig, setDeployConfig] = useState('')
-  const [busy, setBusy] = useState(false)
+  const [lastPaymentLink, setLastPaymentLink] = useState<string | null>(null)
 
   const fetcher = useCallback(async <T,>(path: string): Promise<T> => {
     try {
@@ -497,12 +500,34 @@ export default function ConsolePage() {
   const handleCreateInvoice = async () => {
     setBusy(true)
     setError('')
+    setLastPaymentLink(null)
     try {
-      await apiSend('/api/billing/invoices', 'POST')
+      const res = await apiSend<{ invoice: Invoice; payment: { paymentLinkUrl?: string; status?: string; message?: string } }>(
+        '/api/billing/invoices',
+        'POST',
+      )
+      if (res?.payment?.paymentLinkUrl) {
+        setLastPaymentLink(res.payment.paymentLinkUrl)
+      } else if (res?.payment?.message) {
+        setError(res.payment.message)
+      }
       await mutateInvoices()
       await mutateBilling()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Invoice failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleSyncInvoice = async (id: string) => {
+    setBusy(true)
+    setError('')
+    try {
+      await apiSend(`/api/billing/invoices/${id}/sync`, 'POST')
+      await mutateInvoices()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Sync failed')
     } finally {
       setBusy(false)
     }
@@ -1178,14 +1203,29 @@ export default function ConsolePage() {
               <div className="cl-console-actions">
                 <button type="button" className="gcp-btn-primary gcp-btn-compact" onClick={handleCreateInvoice} disabled={busy}>Generate invoice</button>
               </div>
+              {lastPaymentLink && (
+                <p className="gcp-muted">
+                  Pay via IremboPay:{' '}
+                  <a href={lastPaymentLink} target="_blank" rel="noreferrer">{lastPaymentLink}</a>
+                </p>
+              )}
+              <p className="gcp-muted">Configure IREMBOPAY_* in API env — see docs/IREMBOPAY.md. Webhook marks invoices paid.</p>
               <div className="gcp-table">
-                <div className="gcp-table-row gcp-table-head cl-table-3">
-                  <span>Amount</span><span>Status</span><span>Created</span>
+                <div className="gcp-table-row gcp-table-head cl-table-4">
+                  <span>Amount</span><span>Status</span><span>IremboPay</span><span>Created</span>
                 </div>
                 {(invoicesData?.invoices ?? []).map((inv) => (
-                  <div key={inv.id} className="gcp-table-row cl-table-3">
+                  <div key={inv.id} className="gcp-table-row cl-table-4">
                     <span>{inv.totalAmount} {inv.currency}</span>
                     <span className={`gcp-status gcp-status-${inv.status}`}>{inv.status}</span>
+                    <span className="gcp-muted">
+                      {inv.irembopayPaymentLinkUrl ? (
+                        <a href={inv.irembopayPaymentLinkUrl} target="_blank" rel="noreferrer">Pay</a>
+                      ) : (inv.irembopayInvoiceNumber ?? '—')}
+                      {inv.status === 'pending' && inv.irembopayInvoiceNumber && (
+                        <button type="button" className="cl-console-row-action" onClick={() => handleSyncInvoice(inv.id)} disabled={busy}>Sync</button>
+                      )}
+                    </span>
                     <span className="gcp-muted">{inv.createdAt ? new Date(inv.createdAt).toLocaleDateString() : '—'}</span>
                   </div>
                 ))}

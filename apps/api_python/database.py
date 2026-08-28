@@ -179,8 +179,12 @@ def map_invoice(doc: dict[str, Any]) -> dict[str, Any]:
         'currency': doc.get('currency', 'RWF'),
         'status': doc['status'],
         'irembopayTransactionId': doc.get('irembopayTransactionId'),
+        'irembopayInvoiceNumber': doc.get('irembopayInvoiceNumber'),
+        'irembopayPaymentLinkUrl': doc.get('irembopayPaymentLinkUrl'),
+        'irembopayPaymentStatus': doc.get('irembopayPaymentStatus'),
         'breakdown': doc.get('breakdown') or {},
         'createdAt': doc.get('createdAt'),
+        'paidAt': doc.get('paidAt'),
     }
 
 
@@ -824,6 +828,10 @@ def create_invoice(input_data: dict[str, Any]) -> dict[str, Any]:
         'currency': input_data.get('currency', 'RWF'),
         'status': input_data.get('status', 'pending'),
         'irembopayTransactionId': input_data.get('irembopayTransactionId'),
+        'irembopayInvoiceNumber': input_data.get('irembopayInvoiceNumber'),
+        'irembopayPaymentLinkUrl': input_data.get('irembopayPaymentLinkUrl'),
+        'irembopayPaymentStatus': input_data.get('irembopayPaymentStatus'),
+        'paidAt': input_data.get('paidAt'),
         'breakdown': input_data.get('breakdown') or {},
         'createdAt': now,
     }
@@ -845,6 +853,26 @@ def update_invoice(invoice_id: str, tenant_id: str, updates: dict[str, Any]) -> 
         {'$set': updates},
         return_document=ReturnDocument.AFTER,
     )
+    return map_invoice(doc) if doc else None
+
+
+def find_invoice_by_id(invoice_id: str, tenant_id: str | None = None) -> dict[str, Any] | None:
+    if not is_object_id_string(invoice_id):
+        return None
+    filt: dict[str, Any] = {'_id': as_object_id(invoice_id)}
+    if tenant_id:
+        filt.update(tenant_clause(tenant_id))
+    doc = col('invoices').find_one(filt)
+    return map_invoice(doc) if doc else None
+
+
+def find_invoice_by_irembopay_reference(reference: str) -> dict[str, Any] | None:
+    doc = col('invoices').find_one({
+        '$or': [
+            {'irembopayInvoiceNumber': reference},
+            {'irembopayTransactionId': reference},
+        ],
+    })
     return map_invoice(doc) if doc else None
 
 

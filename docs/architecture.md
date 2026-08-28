@@ -124,7 +124,7 @@ Replace a single “customer-facing API” box with two distinct entry points:
 | VMs | `/api/vms` | `routes/vms.py` | Stub |
 | API Gateway admin | `/api/gateways` | `routes/gateways.py` | Live |
 | Usage metrics | `/api/usage-metrics` | `routes/usage_metrics.py` | Live |
-| Billing | `/api/billing` | `routes/billing.py` | Basic |
+| Billing | `/api/billing` | `routes/billing.py` | Live (IremboPay invoice + webhook) |
 | Monitoring | `/api/monitoring` | `routes/monitoring.py` | Live |
 | Audit logs | `/api/audit-logs` | `routes/audit_logs.py` | Live |
 | Health | `/health` | `routes/health.py` | Live |
@@ -292,7 +292,10 @@ Host ports `6380` / `9010` avoid conflicts when another Redis or MinIO already o
 - Real LB L4 / TCP (`nginx stream`) and TLS terminate for HTTPS
 - Per-instance SQL containers / disk quotas / automated backups (beyond shared engines)
 - Full GraphQL schema (current `/graphql` is a thin query selector)
-- IremboPay production charges
+
+### IremboPay production charges
+
+Done: `POST /payments/invoices` on generate, `paymentLinkUrl` on invoice, webhook at `/api/billing/irembopay/webhook`, sync endpoint. See [docs/IREMBOPAY.md](IREMBOPAY.md).
 
 ### KEDA scale-to-zero
 

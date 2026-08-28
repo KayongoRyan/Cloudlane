@@ -29,6 +29,8 @@ Do **not** use `npm run dev` — that was the legacy Node API.
 
 Optional: `JWT_EXPIRE_MINUTES` = `1440`, `FORCE_HTTPS=true`, `MONGO_TLS_REQUIRED=true`
 
+Optional billing (IremboPay): `IREMBOPAY_API_KEY`, `IREMBOPAY_API_URL`, `IREMBOPAY_PAYMENT_ACCOUNT_IDENTIFIER`, `IREMBOPAY_PRODUCT_CODE`. Webhook URL: `https://<api-host>/api/billing/irembopay/webhook` — see [IREMBOPAY.md](IREMBOPAY.md).
+
 Build `DATABASE_URL` in the Atlas UI (**Connect → Drivers**): use your cluster hostname, database user, and password. URL-encode special characters in the password (e.g. `#` → `%23`). **Never commit the real connection string** — set it only in Netlify env vars and local `apps/api_python/.env` (gitignored).
 
 ### Managed SQL (tenant product)

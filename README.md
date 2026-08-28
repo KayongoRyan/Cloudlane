@@ -341,7 +341,7 @@ Rust       ──► performance · security · storage · net
 | Dashboard / CLI / SDK | TypeScript (Next.js 14, Commander.js) |
 | Control-plane DB | MongoDB (Atlas in prod, `docker compose` locally) |
 | Auth | JWT + platform keys (`cl_*`) + gateway keys (`gw_*`) |
-| Billing | IremboPay (customer id reserved; charges not wired) |
+| Billing | IremboPay invoice API + webhook (see docs/IREMBOPAY.md) |
 
 ```
 [Client: Next.js / CLI / SDK]              [Tenant API clients]
@@ -463,7 +463,7 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 - [x] **Load Balancing** — `/api/load-balancers` + HTTP L7 on `gateway-proxy` (`infra/nginx/lbs`)
 - [x] **Managed DBs + GraphQL** — real Postgres/MySQL on compose + `/graphql` read API
 - [x] **Scale-to-zero (KEDA)** — ScaledObject on provision; optional HTTP add-on (see docs/KEDA.md)
-- [ ] IremboPay production charges
+- [x] **IremboPay production charges** — real invoice API + webhook (see docs/IREMBOPAY.md)
 
 ### Phase 2 — Polish
 - Audit log viewer, alerting, Loki
@@ -482,4 +482,4 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 
 ## Status
 
-V1 control plane in **FastAPI** + **Next.js console**. API Gateway, async provisioning, quotas, provider drivers, **secret vaults**, **HTTP L7 load balancers**, **managed Postgres/MySQL**, **KEDA scale-to-zero**, and a thin **GraphQL** read API are live. Next: LB L4/TLS, IremboPay — see [docs/architecture.md](docs/architecture.md).
+V1 control plane in **FastAPI** + **Next.js console**. API Gateway, async provisioning, quotas, provider drivers, **secret vaults**, **HTTP L7 load balancers**, **managed Postgres/MySQL**, **KEDA scale-to-zero**, **IremboPay billing**, and a thin **GraphQL** read API are live. Next: LB L4/TLS, full GraphQL — see [docs/architecture.md](docs/architecture.md).

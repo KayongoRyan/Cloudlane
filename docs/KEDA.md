@@ -14,9 +14,23 @@ CPU scalers **cannot activate from zero**. KEDA’s admission webhook also **rej
 ### Option A — kubectl only (no Helm)
 
 ```powershell
+# Core KEDA
 kubectl apply --server-side -f https://github.com/kedacore/keda/releases/download/v2.16.1/keda-2.16.1.yaml
-kubectl wait --for=condition=available --timeout=180s deployment/keda-operator deployment/keda-metrics-apiserver deployment/keda-admission -n keda
+kubectl wait --for=condition=available --timeout=180s deployment/keda-operator -n keda
+
+# Optional HTTP add-on (true scale-from-zero)
+kubectl apply --server-side -f https://github.com/kedacore/http-add-on/releases/download/v0.8.0/keda-http-add-on-0.8.0-crds.yaml
+kubectl apply --server-side -f https://github.com/kedacore/http-add-on/releases/download/v0.8.0/keda-http-add-on-0.8.0.yaml
 ```
+
+Then in `apps/api_python/.env`:
+
+```
+KEDA_ENABLED=true
+KEDA_HTTP_ADDON_ENABLED=true
+```
+
+Restart the API/worker so settings reload.
 
 ### Option B — Helm (if installed)
 

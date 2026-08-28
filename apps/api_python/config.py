@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     minio_secret_key: str = 'cloudlane-secret'
     irembopay_api_key: str = ''
     irembopay_api_url: str = 'https://api.irembopay.com'
+    irembopay_api_version: str = '2'
+    irembopay_payment_account_identifier: str = ''
+    irembopay_product_code: str = ''
+    irembopay_public_key: str = ''
+    irembopay_language: str = 'EN'
+    irembopay_webhook_tolerance_seconds: int = 300
     gateway_base_domain: str = 'gateway.cloudlane.run'
     redis_url: str = 'redis://localhost:6380/0'
     gateway_config_dir: str = 'infra/nginx/gateways'
