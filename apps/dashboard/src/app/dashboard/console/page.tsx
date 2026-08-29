@@ -259,6 +259,7 @@ export default function ConsolePage() {
   const [routeForm, setRouteForm] = useState({ method: 'GET', path: '/v1/', targetDeploymentId: '', stage: 'prod' })
   const [newGatewayKey, setNewGatewayKey] = useState<string | null>(null)
   const [deployConfig, setDeployConfig] = useState('')
+  const [busy, setBusy] = useState(false)
   const [lastPaymentLink, setLastPaymentLink] = useState<string | null>(null)
 
   const fetcher = useCallback(async <T,>(path: string): Promise<T> => {
