@@ -1374,9 +1374,9 @@ export default function ConsolePage() {
                 <button type="submit" className="gcp-btn-primary gcp-btn-compact" disabled={busy}>Create LB</button>
               </form>
               <p className="gcp-muted">
-                HTTP/HTTPS L7 on gateway-proxy (:8080). Hit with{' '}
-                <code>curl -H &quot;Host: &lt;dnsName&gt;&quot; http://localhost:8080/</code>.
-                TCP is metadata-only until stream/L4 lands.
+                HTTP L7 on <code>:8080</code> (Host header). HTTPS TLS terminate on <code>:8443</code> (self-signed dev cert).
+                TCP L4 on <code>:19400–19599</code>. Example:{' '}
+                <code>curl -H &quot;Host: &lt;dnsName&gt;&quot; http://localhost:8080/</code>
               </p>
               <div className="gcp-table">
                 <div className="gcp-table-row gcp-table-head cl-table-4">

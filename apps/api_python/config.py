@@ -34,7 +34,11 @@ class Settings(BaseSettings):
     redis_url: str = 'redis://localhost:6380/0'
     gateway_config_dir: str = 'infra/nginx/gateways'
     lb_config_dir: str = 'infra/nginx/lbs'
+    lb_stream_config_dir: str = 'infra/nginx/lb-stream'
+    lb_tls_cert_dir: str = 'infra/nginx/lbs/certs'
     lb_base_domain: str = 'lb.cloudlane.run'
+    lb_tcp_port_min: int = 19400
+    lb_tcp_port_max: int = 19599
     # Managed SQL product (tenant RDS) — not the Mongo control plane
     managed_postgres_host: str = 'localhost'
     managed_postgres_port: int = 5433

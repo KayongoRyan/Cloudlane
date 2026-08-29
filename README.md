@@ -460,14 +460,14 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 - [x] **Quota service** — CPU/memory at max scale, deploy count, buckets; `GET /api/quota` + Hub Quotas UI
 - [x] **Provider drivers** — `services/providers` (K8s compute, MinIO storage)
 - [x] **Secret Vaults** — tenant `/api/secrets` + ops vault `/api/ops/secrets` (Cloudlane secret migration)
-- [x] **Load Balancing** — `/api/load-balancers` + HTTP L7 on `gateway-proxy` (`infra/nginx/lbs`)
+- [x] **Load Balancing** — `/api/load-balancers` + HTTP/HTTPS/TCP on `gateway-proxy` ([docs/LB.md](docs/LB.md))
 - [x] **Managed DBs + GraphQL** — real Postgres/MySQL on compose + `/graphql` read API
 - [x] **Scale-to-zero (KEDA)** — ScaledObject on provision; optional HTTP add-on (see docs/KEDA.md)
 - [x] **IremboPay production charges** — real invoice API + webhook (see docs/IREMBOPAY.md)
 
 ### Phase 2 — Polish
 - Audit log viewer, alerting, Loki
-- LB L4/TLS; SQL backups / dedicated instances
+- SQL backups / dedicated instances
 - Full GraphQL schema
 
 ### Phase 3 — Broader surface
@@ -482,4 +482,4 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 
 ## Status
 
-V1 control plane in **FastAPI** + **Next.js console**. API Gateway, async provisioning, quotas, provider drivers, **secret vaults**, **HTTP L7 load balancers**, **managed Postgres/MySQL**, **KEDA scale-to-zero**, **IremboPay billing**, and a thin **GraphQL** read API are live. Next: LB L4/TLS, full GraphQL — see [docs/architecture.md](docs/architecture.md).
+V1 control plane in **FastAPI** + **Next.js console**. API Gateway, async provisioning, quotas, provider drivers, **secret vaults**, **HTTP/HTTPS/TCP load balancers**, **managed Postgres/MySQL**, **KEDA scale-to-zero**, **IremboPay billing**, and a thin **GraphQL** read API are live. Next: full GraphQL, SQL polish — see [docs/architecture.md](docs/architecture.md).

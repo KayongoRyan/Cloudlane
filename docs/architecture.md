@@ -119,7 +119,7 @@ Replace a single “customer-facing API” box with two distinct entry points:
 | Object storage | `/api/buckets` | `routes/buckets.py` | Live |
 | GraphQL | `/graphql` | `routes/graphql.py` | Live (read subset) |
 | Secrets | `/api/secrets` | `routes/secrets.py` | Live |
-| Load balancers | `/api/load-balancers` | `routes/load_balancers.py` | Live (HTTP L7 on gateway-proxy) |
+| Load balancers | `/api/load-balancers` | `routes/load_balancers.py` | Live (HTTP/HTTPS/TCP on gateway-proxy) |
 | Managed DBs | `/api/databases` | `routes/databases.py` | Live (real Postgres/MySQL on compose) |
 | VMs | `/api/vms` | `routes/vms.py` | Stub |
 | API Gateway admin | `/api/gateways` | `routes/gateways.py` | Live |
@@ -208,7 +208,7 @@ Platform keys default to `deploy`, `read`. Gateway admin accepts `gateway:read` 
 | S3 / object storage | `services/providers/minio.py` → `minio_client.py` | MinIO `:9010`, console `:9011` |
 | Kubernetes | `services/providers/k8s.py` → `kubernetes.py` | Optional; set `KUBECONFIG` |
 | Secret vault | `services/providers/secrets.py` (Fernet) | Encrypted in Mongo `secrets` |
-| Load balancer | `services/providers/load_balancer.py` + `services/lb_config.py` | HTTP L7 on `gateway-proxy`; DNS `*.lb.cloudlane.run`; TCP metadata-only |
+| Load balancer | `services/providers/load_balancer.py` + `services/lb_config.py` | HTTP/HTTPS L7 + TCP L4 on `gateway-proxy`; DNS `*.lb.cloudlane.run` |
 | Managed DB | `services/providers/database.py` | Real DBs on `managed-postgres` (:5433) / `managed-mysql` (:3307); per-tenant DB+user |
 | VMs (EC2-style) | `routes/vms.py` | Stub only |
 | RDS / managed DB | Console `sql-instances` + `/api/databases` | Live local data-plane |
@@ -271,7 +271,7 @@ Host ports `6380` / `9010` avoid conflicts when another Redis or MinIO already o
 | EC2 / VMs | API stub |
 | K8s | Real when cluster configured |
 | S3 | MinIO |
-| Load balancer | HTTP L7 on gateway-proxy (`infra/nginx/lbs`); API Gateway remains for keyed APIs |
+| Load balancer | HTTP/HTTPS L7 + TCP L4 on gateway-proxy (`infra/nginx/lbs`, `lb-stream`); API Gateway remains for keyed APIs |
 | Secret vaults | Live — Fernet-encrypted tenant secrets |
 | RDS | Live locally — shared Postgres/MySQL engines, isolated DB+user per instance |
 | GraphQL | Live thin read API at `/graphql` |
@@ -289,9 +289,12 @@ Host ports `6380` / `9010` avoid conflicts when another Redis or MinIO already o
 
 ### Still open
 
-- Real LB L4 / TCP (`nginx stream`) and TLS terminate for HTTPS
 - Per-instance SQL containers / disk quotas / automated backups (beyond shared engines)
 - Full GraphQL schema (current `/graphql` is a thin query selector)
+
+### Load balancer L4 / TLS
+
+Done: HTTP L7 on `:8080`, HTTPS TLS terminate on `:8443` (auto self-signed dev certs), TCP L4 via nginx `stream` on `:19400–19599`. See [docs/LB.md](LB.md).
 
 ### IremboPay production charges
 

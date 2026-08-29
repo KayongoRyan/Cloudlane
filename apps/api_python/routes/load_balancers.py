@@ -2,12 +2,30 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 import database as db
 from auth import AuthContext, authenticate_request, client_ip, require_scopes
+from config import get_settings
 from schemas import LoadBalancerCreate, LoadBalancerUpdate
 from services.lb_config import sync_lb_configs
 from services.providers import get_load_balancer_provider
 from services.quota import assert_load_balancer_allowed
 
 router = APIRouter()
+
+
+def _validate_tcp_port(port: int, *, exclude_lb_id: str | None = None) -> None:
+    settings = get_settings()
+    if not (settings.lb_tcp_port_min <= port <= settings.lb_tcp_port_max):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f'TCP listen port must be between {settings.lb_tcp_port_min} '
+                f'and {settings.lb_tcp_port_max} (gateway-proxy published range)'
+            ),
+        )
+    if db.is_tcp_lb_port_taken(port, exclude_lb_id=exclude_lb_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f'TCP port {port} is already allocated',
+        )
 
 
 def _sync_configs() -> None:
@@ -46,6 +64,10 @@ async def create_load_balancer(
         dep = db.find_deployment_by_id(payload.targetDeploymentId, auth.tenant_id)
         if not dep:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Target deployment not found')
+
+    protocol = (payload.protocol or 'HTTP').upper()
+    if protocol == 'TCP':
+        _validate_tcp_port(payload.port)
 
     name = payload.name.replace(' ', '-').lower()
     provider = get_load_balancer_provider()
@@ -97,6 +119,13 @@ async def update_load_balancer(
         dep = db.find_deployment_by_id(updates['targetDeploymentId'], auth.tenant_id)
         if not dep:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Target deployment not found')
+    if 'port' in updates:
+        existing = db.find_load_balancer_by_id(lb_id, auth.tenant_id)
+        if not existing:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Load balancer not found')
+        protocol = (existing.get('protocol') or 'HTTP').upper()
+        if protocol == 'TCP':
+            _validate_tcp_port(int(updates['port']), exclude_lb_id=lb_id)
     lb = db.update_load_balancer(lb_id, auth.tenant_id, updates)
     if not lb:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Load balancer not found')

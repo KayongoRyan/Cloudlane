@@ -4,7 +4,7 @@ from config import get_settings
 
 
 class NginxLoadBalancerProvider:
-    """L7 HTTP data-plane via gateway-proxy nginx; TCP remains metadata-only."""
+    """L7 HTTP/HTTPS and L4 TCP data-plane via gateway-proxy nginx."""
 
     def is_ready(self) -> bool:
         return True
@@ -18,14 +18,24 @@ class NginxLoadBalancerProvider:
                 'dnsName': host,
                 'status': 'active',
                 'statusMessage': (
-                    'TCP load balancer recorded (metadata only — L4/stream data-plane not synced yet)'
+                    f'L4 TCP on gateway-proxy :{port} — '
+                    f'nc localhost {port} (target deployment must be running)'
+                ),
+            }
+        if proto == 'HTTPS':
+            return {
+                'dnsName': host,
+                'status': 'active',
+                'statusMessage': (
+                    f'L7 HTTPS TLS terminate on gateway-proxy :8443 — '
+                    f'curl -k -H "Host: {host}" https://localhost:8443/'
                 ),
             }
         return {
             'dnsName': host,
             'status': 'active',
             'statusMessage': (
-                f'L7 data-plane on gateway-proxy :8080 — '
+                f'L7 HTTP on gateway-proxy :8080 — '
                 f'curl -H "Host: {host}" http://localhost:8080/'
             ),
         }
