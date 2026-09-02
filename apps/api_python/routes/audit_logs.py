@@ -6,7 +6,7 @@ from auth import AuthContext, authenticate_request
 router = APIRouter()
 
 
-@router.get('/')
+@router.get('')
 async def list_logs(
     auth: AuthContext = Depends(authenticate_request),
     limit: int = Query(default=50, ge=1, le=200),

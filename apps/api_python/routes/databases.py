@@ -20,7 +20,7 @@ def _enrich_instance(instance: dict, *, refresh_disk: bool = False) -> dict:
     return instance
 
 
-@router.get('/')
+@router.get('')
 async def list_database_instances(
     auth: AuthContext = Depends(authenticate_request),
     projectId: str | None = Query(default=None),
@@ -33,7 +33,7 @@ async def list_database_instances(
     return {'instances': instances}
 
 
-@router.post('/', status_code=status.HTTP_201_CREATED)
+@router.post('', status_code=status.HTTP_201_CREATED)
 async def create_database_instance(
     payload: DatabaseInstanceCreate,
     request: Request,

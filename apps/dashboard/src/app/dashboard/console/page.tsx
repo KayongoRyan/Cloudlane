@@ -213,12 +213,23 @@ function authHeaders(): HeadersInit {
 
 async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(`${getApiBase()}${path}`, { headers: authHeaders() })
+  const text = await res.text()
+  let body: Record<string, unknown> = {}
+  try {
+    body = text ? JSON.parse(text) : {}
+  } catch {
+    /* html / plain */
+  }
   if (res.status === 401) throw new Error('unauthorized')
   if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new Error(body.detail || body.error || 'Request failed')
+    const msg =
+      (typeof body.detail === 'string' && body.detail)
+      || (typeof body.error === 'string' && body.error)
+      || (res.status === 404 ? `Not found: ${path}` : null)
+      || `Request failed (${res.status})`
+    throw new Error(msg)
   }
-  return res.json()
+  return (text ? JSON.parse(text) : {}) as T
 }
 
 async function apiSend<T = unknown>(path: string, method: string, body?: unknown): Promise<T | null> {
@@ -227,13 +238,24 @@ async function apiSend<T = unknown>(path: string, method: string, body?: unknown
     headers: authHeaders(),
     body: body ? JSON.stringify(body) : undefined,
   })
+  const text = await res.text()
+  let data: Record<string, unknown> = {}
+  try {
+    data = text ? JSON.parse(text) : {}
+  } catch {
+    /* html / plain */
+  }
   if (res.status === 401) throw new Error('unauthorized')
   if (!res.ok) {
-    const data = await res.json().catch(() => ({}))
-    throw new Error(data.detail || data.error || 'Request failed')
+    const msg =
+      (typeof data.detail === 'string' && data.detail)
+      || (typeof data.error === 'string' && data.error)
+      || (res.status === 404 ? `Not found: ${path}` : null)
+      || `Request failed (${res.status})`
+    throw new Error(msg)
   }
   if (res.status === 204) return null
-  return res.json() as Promise<T>
+  return (text ? JSON.parse(text) : null) as T
 }
 
 export default function ConsolePage() {

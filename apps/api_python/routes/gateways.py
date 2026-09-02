@@ -52,7 +52,7 @@ def _validate_path(path: str) -> str:
     return path
 
 
-@router.get('/')
+@router.get('')
 async def list_gateways(
     auth: AuthContext = Depends(authenticate_request),
     projectId: str | None = Query(default=None),
@@ -65,7 +65,7 @@ async def list_gateways(
     return {'gateways': enriched}
 
 
-@router.post('/', status_code=status.HTTP_201_CREATED)
+@router.post('', status_code=status.HTTP_201_CREATED)
 async def create_gateway(
     payload: GatewayCreate,
     request: Request,

@@ -35,7 +35,7 @@ def _sync_configs() -> None:
         print(f'lb config sync failed: {exc}')
 
 
-@router.get('/')
+@router.get('')
 async def list_load_balancers(
     auth: AuthContext = Depends(authenticate_request),
     projectId: str | None = Query(default=None),
@@ -44,7 +44,7 @@ async def list_load_balancers(
     return {'loadBalancers': db.list_load_balancers(auth.tenant_id, projectId)}
 
 
-@router.post('/', status_code=status.HTTP_201_CREATED)
+@router.post('', status_code=status.HTTP_201_CREATED)
 async def create_load_balancer(
     payload: LoadBalancerCreate,
     request: Request,

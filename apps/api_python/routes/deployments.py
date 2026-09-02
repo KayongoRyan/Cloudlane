@@ -12,7 +12,7 @@ from services.quota import assert_deployment_allowed
 router = APIRouter()
 
 
-@router.get('/')
+@router.get('')
 async def list_deployments(
     auth: AuthContext = Depends(authenticate_request),
     projectId: str | None = Query(default=None),
@@ -33,7 +33,7 @@ async def get_deployment(deployment_id: str, auth: AuthContext = Depends(authent
     return {'deployment': deployment}
 
 
-@router.post('/', status_code=status.HTTP_202_ACCEPTED)
+@router.post('', status_code=status.HTTP_202_ACCEPTED)
 async def create_deployment(
     payload: DeploymentCreate,
     request: Request,

@@ -59,6 +59,8 @@ app = FastAPI(
     description='FastAPI control plane for Cloudlane deployments and authentication.',
     version='0.2.0',
     lifespan=lifespan,
+    # Clients call /api/foo (no trailing slash). Avoid 307 redirects that drop Authorization on CORS.
+    redirect_slashes=False,
 )
 
 app.add_middleware(

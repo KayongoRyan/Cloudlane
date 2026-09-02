@@ -19,7 +19,7 @@ class OpsSecretUpsert(BaseModel):
     value: str = Field(..., min_length=1, max_length=65536)
 
 
-@router.get('/')
+@router.get('')
 async def list_control_plane_secrets(auth: AuthContext = Depends(authenticate_request)):
     require_admin(auth)
     return {

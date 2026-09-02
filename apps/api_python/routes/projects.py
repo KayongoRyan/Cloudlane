@@ -9,7 +9,7 @@ from schemas import ProjectCreate
 router = APIRouter()
 
 
-@router.get('/')
+@router.get('')
 async def list_projects(auth: AuthContext = Depends(authenticate_request)):
     require_scopes(auth, 'read')
     projects = db.list_projects(auth.tenant_id)
@@ -20,7 +20,7 @@ async def list_projects(auth: AuthContext = Depends(authenticate_request)):
     return {'projects': projects}
 
 
-@router.post('/', status_code=status.HTTP_201_CREATED)
+@router.post('', status_code=status.HTTP_201_CREATED)
 async def create_project(
     payload: ProjectCreate,
     request: Request,

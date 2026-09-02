@@ -219,15 +219,61 @@ export async function runTerminalCommand(
     }
 
     if (rootLower === 'status') {
-      const health = await fetch(`${getApiBase()}/health`).then((r) => r.ok).catch(() => false)
+      const base = getApiBase()
+      let healthPayload: Record<string, unknown> | null = null
+      let healthOk = false
+      try {
+        const hr = await fetch(`${base}/health`)
+        healthOk = hr.ok
+        healthPayload = hr.ok ? await hr.json().catch(() => ({})) : null
+      } catch {
+        healthOk = false
+      }
+
+      const hasToken = Boolean(localStorage.getItem('token'))
+      let authLine = 'not signed in'
+      let authOk = false
+      if (hasToken) {
+        try {
+          await consoleApiGet<{ projects: unknown[] }>('/api/projects')
+          authOk = true
+          authLine = 'Bearer token valid'
+        } catch (err: unknown) {
+          authLine = err instanceof Error ? `token rejected — ${err.message}` : 'token rejected'
+        }
+      }
+
+      // Python health includes `encryption`; Node (Express) does not.
+      const flavor =
+        healthPayload && 'encryption' in healthPayload
+          ? 'python (full control plane)'
+          : healthPayload && 'hasDatabaseUrl' in healthPayload
+            ? 'node (legacy — no db/gateway/lb/sql routes)'
+            : healthOk
+              ? 'unknown'
+              : 'unreachable'
+
+      const projectLine = ctx.projectId
+        ? `${ctx.projectName ?? '—'} (${ctx.projectId})`
+        : 'none selected — pick a project in the top bar (or create one)'
+
       lines.push({
-        type: health ? 'ok' : 'err',
+        type: healthOk && authOk ? 'ok' : 'err',
         text: [
-          `API          ${getApiBase()} ${health ? '● online' : '○ unreachable'}`,
-          `Project      ${ctx.projectName ?? '—'} (${ctx.projectId ?? 'none'})`,
-          `Auth         ${localStorage.getItem('token') ? 'Bearer token in session' : 'not signed in'}`,
+          `API          ${base} ${healthOk ? '● online' : '○ unreachable'}`,
+          `Backend      ${flavor}`,
+          `Project      ${projectLine}`,
+          `Auth         ${authLine}`,
           `Shell        Cloudlane Terminal v1 (browser)`,
-        ].join('\n'),
+          !authOk && hasToken
+            ? `Hint         Re-login so JWT matches this API host.`
+            : '',
+          flavor.startsWith('node')
+            ? `Hint         Point NEXT_PUBLIC_API_URL at http://localhost:8001 (Python) for db/gateway/lb.`
+            : '',
+        ]
+          .filter(Boolean)
+          .join('\n'),
       })
       return lines
     }

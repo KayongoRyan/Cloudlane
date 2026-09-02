@@ -9,7 +9,7 @@ from services.quota import assert_secret_allowed
 router = APIRouter()
 
 
-@router.get('/')
+@router.get('')
 async def list_secrets(
     auth: AuthContext = Depends(authenticate_request),
     projectId: str | None = Query(default=None),
@@ -18,7 +18,7 @@ async def list_secrets(
     return {'secrets': db.list_secrets(auth.tenant_id, projectId)}
 
 
-@router.post('/', status_code=status.HTTP_201_CREATED)
+@router.post('', status_code=status.HTTP_201_CREATED)
 async def create_secret(
     payload: SecretCreate,
     request: Request,

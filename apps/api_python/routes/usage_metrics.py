@@ -18,7 +18,7 @@ METRIC_TYPES = {
 }
 
 
-@router.get('/')
+@router.get('')
 async def list_metrics(
     auth: AuthContext = Depends(authenticate_request),
     deploymentId: str | None = Query(default=None),
@@ -28,7 +28,7 @@ async def list_metrics(
     return {'usageMetrics': db.list_usage_metrics(auth.tenant_id, deploymentId, limit)}
 
 
-@router.post('/', status_code=status.HTTP_201_CREATED)
+@router.post('', status_code=status.HTTP_201_CREATED)
 async def create_metric(payload: UsageMetricCreate, request: Request, auth: AuthContext = Depends(authenticate_request)):
     require_scopes(auth, 'deploy')
 

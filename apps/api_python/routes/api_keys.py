@@ -10,13 +10,13 @@ from services.utils import generate_api_key, hash_api_key
 router = APIRouter()
 
 
-@router.get('/')
+@router.get('')
 async def list_keys(auth: AuthContext = Depends(authenticate_request)):
     require_scopes(auth, 'read')
     return {'apiKeys': db.list_api_keys(auth.tenant_id)}
 
 
-@router.post('/', status_code=status.HTTP_201_CREATED)
+@router.post('', status_code=status.HTTP_201_CREATED)
 async def create_key(payload: ApiKeyCreate, request: Request, auth: AuthContext = Depends(authenticate_request)):
     require_scopes(auth, 'deploy')
     if not auth.user_id:

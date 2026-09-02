@@ -7,7 +7,7 @@ from schemas import VmCreate
 router = APIRouter()
 
 
-@router.get('/')
+@router.get('')
 async def list_vms(
     auth: AuthContext = Depends(authenticate_request),
     projectId: str | None = Query(default=None),
@@ -16,7 +16,7 @@ async def list_vms(
     return {'vms': db.list_vms(auth.tenant_id, projectId)}
 
 
-@router.post('/', status_code=status.HTTP_201_CREATED)
+@router.post('', status_code=status.HTTP_201_CREATED)
 async def create_vm(
     payload: VmCreate,
     request: Request,
