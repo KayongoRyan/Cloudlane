@@ -17,6 +17,7 @@ interface ConsoleTopBarProps {
   projectId: string
   projects: Project[]
   onProjectChange: (id: string) => void
+  onDataChange?: () => void
   actions?: ReactNode
   profileInitials?: string
 }
@@ -29,6 +30,7 @@ export const ConsoleTopBar = forwardRef<HTMLElement, ConsoleTopBarProps>(functio
     projectId,
     projects,
     onProjectChange,
+    onDataChange,
     actions,
     profileInitials = 'CL',
   },
@@ -131,6 +133,7 @@ export const ConsoleTopBar = forwardRef<HTMLElement, ConsoleTopBarProps>(functio
         onClose={() => setTerminalOpen(false)}
         projectId={projectId}
         projectName={activeProject?.name}
+        onDataChange={onDataChange}
       />
     </>
   )

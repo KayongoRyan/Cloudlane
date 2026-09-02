@@ -5,188 +5,139 @@ import {
   KeyboardEvent,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react'
 import { getApiBase } from '../lib/api'
-
-interface Deployment {
-  id: string
-  name: string
-  image: string
-  status: string
-  publicUrl?: string
-}
+import {
+  matchCommandPrefix,
+  QUICK_COMMANDS,
+  runTerminalCommand,
+  type TerminalLine,
+} from '../lib/cloudlaneTerminal'
 
 interface CloudlaneTerminalProps {
   open: boolean
   onClose: () => void
   projectId?: string
   projectName?: string
+  onDataChange?: () => void
 }
 
-type Line = { type: 'in' | 'out' | 'err' | 'sys'; text: string }
+const WELCOME = `Cloudlane Terminal — full control plane in your browser
+Type "help" for commands · Tab autocomplete · ↑↓ history · Ctrl+L clear · Esc close`
 
-const WELCOME = `Cloudlane Terminal — local workspace + cloud control plane
-Type "help" for commands. Tracks this browser session and your Cloudlane deployments.`
+function buildWelcome(projectName?: string): TerminalLine {
+  const proj = projectName ? `Project: ${projectName}` : 'No project selected — pick one in the top bar'
+  return {
+    type: 'sys',
+    text: `${WELCOME}\n${proj}`,
+  }
+}
 
 export default function CloudlaneTerminal({
   open,
   onClose,
   projectId,
   projectName,
+  onDataChange,
 }: CloudlaneTerminalProps) {
-  const [lines, setLines] = useState<Line[]>([{ type: 'sys', text: WELCOME }])
+  const [lines, setLines] = useState<TerminalLine[]>([buildWelcome(projectName)])
   const [input, setInput] = useState('')
   const [history, setHistory] = useState<string[]>([])
   const [histIdx, setHistIdx] = useState(-1)
+  const [busy, setBusy] = useState(false)
+  const [hint, setHint] = useState<string | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
+  const dialogRef = useRef<HTMLElement>(null)
+
+  const ctx = { projectId, projectName }
 
   useEffect(() => {
-    if (open) {
-      inputRef.current?.focus()
-      bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight })
+    if (!open) return
+    setLines([buildWelcome(projectName)])
+    setInput('')
+    setHint(null)
+    setHistIdx(-1)
+    inputRef.current?.focus()
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
     }
-  }, [open])
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [open, onClose, projectName])
 
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight, behavior: 'smooth' })
   }, [lines])
 
-  const append = useCallback((next: Line | Line[]) => {
+  const append = useCallback((next: TerminalLine | TerminalLine[]) => {
     setLines((prev) => prev.concat(Array.isArray(next) ? next : [next]))
   }, [])
 
-  const fetchDeployments = useCallback(async (): Promise<Deployment[]> => {
-    const token = localStorage.getItem('token')
-    if (!token) throw new Error('Not signed in')
-    const q = projectId ? `?projectId=${projectId}` : ''
-    const res = await fetch(`${getApiBase()}/api/deployments${q}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (!res.ok) throw new Error('Failed to load deployments')
-    const data = await res.json()
-    return data.deployments ?? []
-  }, [projectId])
-
-  const runCommand = useCallback(async (raw: string) => {
+  const run = useCallback(async (raw: string) => {
     const cmd = raw.trim()
     if (!cmd) return
-
-    append({ type: 'in', text: `$ ${cmd}` })
-
-    const [name, ...rest] = cmd.split(/\s+/)
-    const arg = rest.join(' ')
-
-    try {
-      switch (name.toLowerCase()) {
-        case 'help':
-          append({
-            type: 'out',
-            text: [
-              'help          — this message',
-              'status        — control plane + project health',
-              'local         — this machine / browser context',
-              'projects      — active project',
-              'deployments   — list cloud deployments',
-              'deploy <n>    — hint: use console or cloudlane deploy',
-              'logs <name>   — tail logs (requires CLI)',
-              'clear         — clear terminal',
-              'exit          — close terminal',
-            ].join('\n'),
-          })
-          break
-        case 'clear':
-          setLines([])
-          break
-        case 'exit':
-          onClose()
-          break
-        case 'status': {
-          const health = await fetch(`${getApiBase()}/health`).then((r) => r.ok).catch(() => false)
-          append({
-            type: 'out',
-            text: [
-              `API: ${health ? 'reachable' : 'unreachable'}`,
-              `Project: ${projectName ?? '—'} (${projectId ?? 'none'})`,
-              'Local agent: browser session (install Cloudlane CLI for full host tracking)',
-            ].join('\n'),
-          })
-          break
-        }
-        case 'local':
-          append({
-            type: 'out',
-            text: [
-              `Platform: ${navigator.platform}`,
-              `Language: ${navigator.language}`,
-              `Online: ${navigator.onLine ? 'yes' : 'no'}`,
-              `Timezone: ${Intl.DateTimeFormat().resolvedOptions().timeZone}`,
-              'Note: cloudlane CLI on your machine syncs local repos, Docker, and kubeconfig.',
-            ].join('\n'),
-          })
-          break
-        case 'projects':
-          append({
-            type: 'out',
-            text: projectName
-              ? `Active: ${projectName} (${projectId})`
-              : 'No project selected.',
-          })
-          break
-        case 'deployments': {
-          const deps = await fetchDeployments()
-          if (!deps.length) {
-            append({ type: 'out', text: 'No deployments in this project.' })
-            break
-          }
-          append({
-            type: 'out',
-            text: deps.map((d) =>
-              `${d.name.padEnd(16)} ${d.status.padEnd(10)} ${d.publicUrl ?? d.image}`,
-            ).join('\n'),
-          })
-          break
-        }
-        case 'deploy':
-          append({
-            type: 'out',
-            text: arg
-              ? `Deploy "${arg}" via: cloudlane deploy --name ${arg} --image <image>`
-              : 'Usage: deploy <service-name>',
-          })
-          break
-        case 'logs':
-          append({
-            type: 'out',
-            text: arg
-              ? `Run locally: cloudlane logs ${arg}`
-              : 'Usage: logs <service-name>',
-          })
-          break
-        default:
-          append({ type: 'err', text: `Unknown command: ${name}. Type "help".` })
-      }
-    } catch (err: unknown) {
-      append({
-        type: 'err',
-        text: err instanceof Error ? err.message : 'Command failed',
-      })
+    if (cmd === 'clear') {
+      setLines([])
+      return
     }
-  }, [append, fetchDeployments, onClose, projectId, projectName])
+    setBusy(true)
+    try {
+      const out = await runTerminalCommand(cmd, ctx)
+      append(out)
+      const mutating = ['deploy', 'db', 'lb', 'secret', 'bucket', 'gateway', 'graphql', 'vm'].some((p) =>
+        cmd.toLowerCase().startsWith(p),
+      )
+      if (mutating && onDataChange) onDataChange()
+    } finally {
+      setBusy(false)
+    }
+  }, [append, ctx, onDataChange, projectId, projectName])
+
+  const runQuick = (cmd: string) => {
+    if (busy) return
+    setHistory((h) => [cmd, ...h.filter((x) => x !== cmd)].slice(0, 100))
+    setInput('')
+    setHint(null)
+    void run(cmd)
+  }
+
+  const quickGroups = useMemo(() => {
+    const groups = new Map<string, string[]>()
+    for (const { group, cmd } of QUICK_COMMANDS) {
+      const list = groups.get(group) ?? []
+      list.push(cmd)
+      groups.set(group, list)
+    }
+    return [...groups.entries()]
+  }, [])
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
     const cmd = input.trim()
-    if (!cmd) return
-    setHistory((h) => [cmd, ...h].slice(0, 50))
+    if (!cmd || busy) return
+    setHistory((h) => [cmd, ...h.filter((x) => x !== cmd)].slice(0, 100))
     setHistIdx(-1)
     setInput('')
-    void runCommand(cmd)
+    setHint(null)
+    void run(cmd)
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'l' && e.ctrlKey) {
+      e.preventDefault()
+      setLines([])
+      return
+    }
+    if (e.key === 'Tab') {
+      e.preventDefault()
+      const match = matchCommandPrefix(input)
+      if (match) setInput(match)
+      return
+    }
     if (e.key === 'ArrowUp') {
       e.preventDefault()
       if (!history.length) return
@@ -207,50 +158,88 @@ export default function CloudlaneTerminal({
     }
   }
 
+  const onInputChange = (value: string) => {
+    setInput(value)
+    setHint(matchCommandPrefix(value))
+  }
+
   if (!open) return null
 
   return (
     <div className="cl-terminal-backdrop" role="presentation" onClick={onClose}>
       <section
-        className="cl-terminal"
+        ref={dialogRef}
+        className="cl-terminal cl-terminal--expanded"
         role="dialog"
         aria-label="Cloudlane terminal"
+        aria-modal="true"
         onClick={(e) => e.stopPropagation()}
       >
         <header className="cl-terminal-head">
+          <div className="cl-terminal-dots" aria-hidden>
+            <span /><span /><span />
+          </div>
           <div className="cl-terminal-title">
             <TerminalIcon />
             <span>Cloudlane Terminal</span>
           </div>
           <span className="cl-terminal-meta">
-            {projectName ? `Project: ${projectName}` : 'No project'}
+            {projectName ? projectName : 'No project'} · {getApiBase().replace(/^https?:\/\//, '')}
           </span>
           <button type="button" className="cl-terminal-close" onClick={onClose} aria-label="Close terminal">
             ✕
           </button>
         </header>
-        <div className="cl-terminal-body" ref={bodyRef}>
-          {lines.map((line, i) => (
-            <div key={`${i}-${line.text.slice(0, 12)}`} className={`cl-terminal-line cl-terminal-line--${line.type}`}>
-              {line.text.split('\n').map((part, j) => (
-                <span key={j}>{part}{j < line.text.split('\n').length - 1 && <br />}</span>
+
+        <div className="cl-terminal-layout">
+          <aside className="cl-terminal-sidebar">
+            <p className="cl-terminal-sidebar-title">Quick commands</p>
+            {quickGroups.map(([group, cmds]) => (
+              <div key={group} className="cl-terminal-sidebar-group">
+                <p className="cl-terminal-sidebar-group-label">{group}</p>
+                <ul>
+                  {cmds.map((cmd) => (
+                    <li key={cmd}>
+                      <button type="button" onClick={() => runQuick(cmd)} disabled={busy} title="Run">
+                        {cmd}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </aside>
+
+          <div className="cl-terminal-main">
+            <div className="cl-terminal-body" ref={bodyRef}>
+              {lines.map((line, i) => (
+                <div key={`${i}-${line.text.slice(0, 16)}`} className={`cl-terminal-line cl-terminal-line--${line.type}`}>
+                  {line.text.split('\n').map((part, j, arr) => (
+                    <span key={j}>{part}{j < arr.length - 1 && <br />}</span>
+                  ))}
+                </div>
               ))}
+              {busy && <div className="cl-terminal-line cl-terminal-line--sys">…</div>}
             </div>
-          ))}
+            <form className="cl-terminal-input-row" onSubmit={onSubmit}>
+              <span className="cl-terminal-prompt" aria-hidden>cloudlane</span>
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => onInputChange(e.target.value)}
+                onKeyDown={onKeyDown}
+                spellCheck={false}
+                autoComplete="off"
+                disabled={busy}
+                aria-label="Terminal command"
+                placeholder="help"
+              />
+              {hint && hint !== input.trim().toLowerCase() && (
+                <span className="cl-terminal-hint" aria-hidden>{hint}</span>
+              )}
+            </form>
+          </div>
         </div>
-        <form className="cl-terminal-input-row" onSubmit={onSubmit}>
-          <span className="cl-terminal-prompt" aria-hidden>$</span>
-          <input
-            ref={inputRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={onKeyDown}
-            spellCheck={false}
-            autoComplete="off"
-            aria-label="Terminal command"
-            placeholder="help"
-          />
-        </form>
       </section>
     </div>
   )

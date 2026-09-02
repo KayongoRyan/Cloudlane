@@ -21,10 +21,12 @@ import ConsoleNav, {
   RUN_DEPLOY_TABS,
   SECURITY_AUDIT_TABS,
   SQL_GET_STARTED_TABS,
+  SQL_BACKUP_TABS,
   PRODUCT_IDS,
   SERVICE_LABELS,
   type ServiceId,
 } from '../../../components/ConsoleNav'
+import ServiceProductOverview from '../../../components/ServiceProductOverview'
 import { getApiBase } from '../../../lib/api'
 
 interface Project {
@@ -262,6 +264,8 @@ export default function ConsolePage() {
   const [routeForm, setRouteForm] = useState({ method: 'GET', path: '/v1/', targetDeploymentId: '', stage: 'prod' })
   const [newGatewayKey, setNewGatewayKey] = useState<string | null>(null)
   const [deployConfig, setDeployConfig] = useState('')
+  const [selectedBucket, setSelectedBucket] = useState('')
+  const [bucketObjects, setBucketObjects] = useState<string[]>([])
   const [busy, setBusy] = useState(false)
   const [lastPaymentLink, setLastPaymentLink] = useState<string | null>(null)
 
@@ -334,13 +338,16 @@ export default function ConsolePage() {
   const showSecrets = SECRET_TABS.includes(tab)
   const showLoadBalancers = LB_TABS.includes(tab)
   const showSqlInstances = SQL_INSTANCE_TABS.includes(tab)
+  const showSqlBackups = SQL_BACKUP_TABS.includes(tab)
+  const parentOverviewTabs: ServiceId[] = ['apis', 'vpc', 'bigquery', 'databases', 'hub-home']
+  const showProductOverview = isOverviewTab(tab) || isProductStubTab(tab) || parentOverviewTabs.includes(tab)
 
   const { data: keysData, mutate: mutateKeys } = useSWR(
     showApiKeys ? 'console-keys' : null,
     () => fetcher<{ apiKeys: ApiKeyRow[] }>('/api/api-keys'),
   )
   const { data: bucketsData, mutate: mutateBuckets } = useSWR(
-    tab === 'storage' ? ['console-buckets', projectId] : null,
+    tab === 'storage' || showProductOverview ? ['console-buckets', projectId] : null,
     () => fetcher<{ buckets: Bucket[] }>(`/api/buckets${projectQuery}`),
   )
   const { data: billingUsage, mutate: mutateBilling } = useSWR(
@@ -368,7 +375,7 @@ export default function ConsolePage() {
     () => fetcher<{ auditLogs: AuditLog[] }>('/api/audit-logs'),
   )
   const { data: gatewaysData, mutate: mutateGateways } = useSWR(
-    showGateway ? ['console-gateways', projectId] : null,
+    showGateway || showProductOverview ? ['console-gateways', projectId] : null,
     () => fetcher<{ gateways: GatewayRow[] }>(`/api/gateways${projectQuery}`),
   )
   const activeGatewayId = selectedGatewayId || gatewaysData?.gateways?.[0]?.id || ''
@@ -385,7 +392,7 @@ export default function ConsolePage() {
     () => fetcher<{ keys: GatewayKeyRow[] }>(`/api/gateways/${activeGatewayId}/keys`),
   )
   const { data: secretsData, mutate: mutateSecrets } = useSWR(
-    showSecrets ? ['console-secrets', projectId] : null,
+    showSecrets || showProductOverview ? ['console-secrets', projectId] : null,
     () => fetcher<{ secrets: SecretRow[] }>(`/api/secrets${projectQuery}`),
   )
   const { data: opsSecretsData, mutate: mutateOpsSecrets } = useSWR(
@@ -393,17 +400,66 @@ export default function ConsolePage() {
     () => fetcher<{ secrets: OpsSecretRow[]; note?: string }>('/api/ops/secrets'),
   )
   const { data: lbsData, mutate: mutateLbs } = useSWR(
-    showLoadBalancers ? ['console-lbs', projectId] : null,
+    showLoadBalancers || showProductOverview ? ['console-lbs', projectId] : null,
     () => fetcher<{ loadBalancers: LoadBalancerRow[] }>(`/api/load-balancers${projectQuery}`),
   )
   const { data: dbsData, mutate: mutateDbs } = useSWR(
-    showSqlInstances ? ['console-dbs', projectId] : null,
+    showSqlInstances || showSqlBackups || showProductOverview ? ['console-dbs', projectId] : null,
     () => fetcher<{ instances: DatabaseInstanceRow[] }>(`/api/databases${projectQuery}`),
   )
 
   const deployments = depData?.deployments ?? []
   const gateways = gatewaysData?.gateways ?? []
   const runningDeployments = deployments.filter((d) => d.status === 'running')
+
+  const { data: sqlBackupsData, mutate: mutateSqlBackups } = useSWR(
+    showSqlBackups ? ['console-sql-backups', projectId, dbsData?.instances?.length] : null,
+    async () => {
+      const instances = dbsData?.instances ?? []
+      const rows: { instanceName: string; instanceId: string; id: string; status: string; sizeBytes: number; createdAt?: string; trigger: string }[] = []
+      for (const inst of instances) {
+        const res = await fetcher<{ backups: { id: string; status: string; sizeBytes: number; createdAt?: string; trigger: string }[] }>(
+          `/api/databases/${inst.id}/backups`,
+        )
+        for (const b of res.backups) {
+          rows.push({ ...b, instanceName: inst.name, instanceId: inst.id })
+        }
+      }
+      return rows
+    },
+  )
+
+  const refreshConsoleData = useCallback(() => {
+    void mutateDeps()
+    void mutateProjects()
+    void mutateKeys()
+    void mutateBuckets()
+    void mutateGateways()
+    void mutateLbs()
+    void mutateDbs()
+    void mutateSecrets()
+    void mutateMonitoring()
+    void mutateBilling()
+    void mutateInvoices()
+    void mutateVms()
+    void mutateSqlBackups()
+  }, [
+    mutateDeps, mutateProjects, mutateKeys, mutateBuckets, mutateGateways,
+    mutateLbs, mutateDbs, mutateSecrets, mutateMonitoring, mutateBilling,
+    mutateInvoices, mutateVms, mutateSqlBackups,
+  ])
+
+  const consoleStats = useMemo(() => ({
+    deployments: deployments.length,
+    running: runningDeployments.length,
+    failed: deployments.filter((d) => d.status === 'failed').length,
+    gateways: gateways.length,
+    buckets: bucketsData?.buckets?.length ?? 0,
+    databases: dbsData?.instances?.length ?? 0,
+    loadBalancers: lbsData?.loadBalancers?.length ?? 0,
+    secrets: secretsData?.secrets?.length ?? 0,
+    apiHealthy,
+  }), [deployments, runningDeployments, gateways, bucketsData, dbsData, lbsData, secretsData, apiHealthy])
 
   useEffect(() => {
     if (!selectedGatewayId && gateways.length) {
@@ -704,6 +760,7 @@ export default function ConsolePage() {
     try {
       await apiSend(`/api/databases/${id}/backups`, 'POST')
       await mutateDbs()
+      await mutateSqlBackups()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Backup failed')
     } finally {
@@ -868,6 +925,7 @@ export default function ConsolePage() {
       projectId={projectId}
       projects={projects}
       onProjectChange={setProjectId}
+      onDataChange={refreshConsoleData}
       actions={!isHubView ? (
         <button
           type="button"
@@ -950,29 +1008,28 @@ export default function ConsolePage() {
               </form>
               <p className="gcp-muted">
                 min/max instances — default 0→3. KEDA ScaledObject on cluster when enabled; HTTP add-on for wake-from-zero (see docs/KEDA.md).
+                Open <strong>Cloudlane Terminal</strong> to run <code>deploy create --name api --image nginx:alpine --port 80</code>.
               </p>
-              <div className="gcp-table">
-                <div className="gcp-table-row gcp-table-head">
-                  <span>Name</span><span>Image</span><span>URL</span><span>Status</span>
-                </div>
+              <div className="cl-resource-grid">
                 {deployments.length === 0 && (
-                  <div className="gcp-table-row cl-console-empty">No deployments yet.</div>
+                  <div className="cl-resource-card cl-resource-card--empty">No deployments yet — deploy above or use the terminal.</div>
                 )}
                 {deployments.map((d) => (
-                  <div key={d.id} className="gcp-table-row">
-                    <span className="gcp-service">{d.name}</span>
-                    <span className="gcp-muted">{d.image}</span>
-                    {d.publicUrl ? (
-                      <a className="gcp-link" href={d.publicUrl} target="_blank" rel="noreferrer">{d.publicUrl.replace('https://', '')}</a>
-                    ) : (
-                      <span className="gcp-muted">—</span>
-                    )}
-                    <span className={`gcp-status gcp-status-${d.status}`}>{d.status}</span>
-                    {d.statusMessage && (
-                      <span className="gcp-muted cl-console-status-msg">{d.statusMessage}</span>
-                    )}
-                    <button type="button" className="cl-console-row-action" onClick={() => handleDeleteDeployment(d.id)} disabled={busy}>Stop</button>
-                  </div>
+                  <article key={d.id} className="cl-resource-card">
+                    <header className="cl-resource-card-head">
+                      <span className="gcp-service">{d.name}</span>
+                      <span className={`gcp-status gcp-status-${d.status}`}>{d.status}</span>
+                    </header>
+                    <dl className="cl-resource-meta">
+                      <div><dt>Image</dt><dd>{d.image}</dd></div>
+                      <div><dt>Port</dt><dd>{d.port}</dd></div>
+                      <div><dt>URL</dt><dd>{d.publicUrl ? <a className="gcp-link" href={d.publicUrl} target="_blank" rel="noreferrer">{d.publicUrl.replace('https://', '')}</a> : '—'}</dd></div>
+                      {d.statusMessage && <div className="cl-resource-full"><dt>Status</dt><dd>{d.statusMessage}</dd></div>}
+                    </dl>
+                    <footer className="cl-resource-actions">
+                      <button type="button" className="cl-console-row-action" onClick={() => handleDeleteDeployment(d.id)} disabled={busy}>Stop</button>
+                    </footer>
+                  </article>
                 ))}
               </div>
             </>
@@ -1027,16 +1084,13 @@ export default function ConsolePage() {
             </>
           )}
 
-          {isOverviewTab(tab) && (
-            <div className="cl-gc-stub">
-              <p>{SERVICE_LABELS[tab]} — pick a section from the chevron menu to get started.</p>
-            </div>
-          )}
-
-          {isProductStubTab(tab) && (
-            <div className="cl-gc-stub">
-              <p>{SERVICE_LABELS[tab]} is coming soon on Cloudlane.</p>
-            </div>
+          {showProductOverview && (
+            <ServiceProductOverview
+              tab={tab}
+              stats={consoleStats}
+              onNavigate={openService}
+              variant={isProductStubTab(tab) ? 'stub' : 'overview'}
+            />
           )}
 
           {showGateway && (
@@ -1060,24 +1114,31 @@ export default function ConsolePage() {
                     <input required placeholder="Gateway name" value={gatewayName} onChange={(e) => setGatewayName(e.target.value)} />
                     <button type="submit" className="gcp-btn-primary gcp-btn-compact" disabled={busy}>Create gateway</button>
                   </form>
-                  <div className="gcp-table">
-                    <div className="gcp-table-row gcp-table-head cl-table-4">
-                      <span>Name</span><span>Hostname</span><span>Routes</span><span>Status</span>
-                    </div>
+                  <p className="gcp-muted">
+                    Edge API gateway with consumer keys and nginx config generation. Terminal:{' '}
+                    <code>gateway create --name public-api</code>
+                  </p>
+                  <div className="cl-resource-grid">
                     {gateways.length === 0 && (
-                      <div className="gcp-table-row cl-console-empty">No gateways yet — create one to front your deployments.</div>
+                      <div className="cl-resource-card cl-resource-card--empty">No gateways yet — create one to front your deployments.</div>
                     )}
                     {gateways.map((g) => (
-                      <div key={g.id} className="gcp-table-row cl-table-4">
-                        <span className="gcp-service">{g.name}</span>
-                        <span className="gcp-muted">{g.hostnames[0] ?? '—'}</span>
-                        <span>{g.routeCount ?? 0}</span>
-                        <span className={`gcp-status gcp-status-${g.status}`}>{g.status}</span>
-                        <button type="button" className="cl-console-row-action" onClick={() => handleToggleGateway(g.id, g.status)} disabled={busy}>
-                          {g.status === 'active' ? 'Disable' : 'Enable'}
-                        </button>
-                        <button type="button" className="cl-console-row-action" onClick={() => handleDeleteGateway(g.id)} disabled={busy}>Delete</button>
-                      </div>
+                      <article key={g.id} className="cl-resource-card">
+                        <header className="cl-resource-card-head">
+                          <span className="gcp-service">{g.name}</span>
+                          <span className={`gcp-status gcp-status-${g.status}`}>{g.status}</span>
+                        </header>
+                        <dl className="cl-resource-meta">
+                          <div><dt>Hostname</dt><dd>{g.hostnames[0] ?? '—'}</dd></div>
+                          <div><dt>Routes</dt><dd>{g.routeCount ?? 0}</dd></div>
+                        </dl>
+                        <footer className="cl-resource-actions">
+                          <button type="button" className="cl-console-row-action" onClick={() => handleToggleGateway(g.id, g.status)} disabled={busy}>
+                            {g.status === 'active' ? 'Disable' : 'Enable'}
+                          </button>
+                          <button type="button" className="cl-console-row-action" onClick={() => handleDeleteGateway(g.id)} disabled={busy}>Delete</button>
+                        </footer>
+                      </article>
                     ))}
                   </div>
                 </>
@@ -1191,17 +1252,49 @@ export default function ConsolePage() {
                 <input required placeholder="Bucket name" value={bucketName} onChange={(e) => setBucketName(e.target.value)} />
                 <button type="submit" className="gcp-btn-primary gcp-btn-compact" disabled={busy}>Create bucket</button>
               </form>
-              <div className="gcp-table">
-                <div className="gcp-table-row gcp-table-head cl-table-2">
-                  <span>Name</span><span>Project</span>
-                </div>
+              <p className="gcp-muted">MinIO-backed S3-compatible storage. Terminal: <code>bucket list</code> · <code>bucket create --name uploads</code></p>
+              <div className="cl-resource-grid">
+                {(bucketsData?.buckets ?? []).length === 0 && (
+                  <div className="cl-resource-card cl-resource-card--empty">No buckets yet.</div>
+                )}
                 {(bucketsData?.buckets ?? []).map((b) => (
-                  <div key={b.id} className="gcp-table-row cl-table-2">
-                    <span className="gcp-service">{b.name}</span>
-                    <span className="gcp-muted">{b.projectId ?? '—'}</span>
-                  </div>
+                  <article key={b.id} className="cl-resource-card">
+                    <header className="cl-resource-card-head">
+                      <span className="gcp-service">{b.name}</span>
+                    </header>
+                    <dl className="cl-resource-meta">
+                      <div><dt>Project</dt><dd className="gcp-muted">{b.projectId ?? 'default'}</dd></div>
+                    </dl>
+                    <footer className="cl-resource-actions">
+                      <button
+                        type="button"
+                        className="cl-console-row-action"
+                        onClick={async () => {
+                          setSelectedBucket(b.name)
+                          try {
+                            const res = await fetcher<{ objects: string[] }>(`/api/buckets/${b.name}/objects`)
+                            setBucketObjects(res.objects)
+                          } catch {
+                            setBucketObjects([])
+                          }
+                        }}
+                      >
+                        Browse objects
+                      </button>
+                    </footer>
+                  </article>
                 ))}
               </div>
+              {selectedBucket && (
+                <div className="cl-storage-objects">
+                  <h4>Objects in <code>{selectedBucket}</code></h4>
+                  {bucketObjects.length === 0 ? (
+                    <p className="gcp-muted">No objects or bucket not reachable.</p>
+                  ) : (
+                    <ul>{bucketObjects.map((o) => <li key={o}><code>{o}</code></li>)}</ul>
+                  )}
+                </div>
+              )}
             </>
           )}
 
@@ -1391,24 +1484,32 @@ export default function ConsolePage() {
               </form>
               <p className="gcp-muted">
                 HTTP L7 on <code>:8080</code> (Host header). HTTPS TLS terminate on <code>:8443</code> (self-signed dev cert).
-                TCP L4 on <code>:19400–19599</code>. Example:{' '}
-                <code>curl -H &quot;Host: &lt;dnsName&gt;&quot; http://localhost:8080/</code>
+                TCP L4 on <code>:19400–19599</code>. Terminal: <code>lb create --name edge --protocol HTTP --port 80</code>
               </p>
-              <div className="gcp-table">
-                <div className="gcp-table-row gcp-table-head cl-table-4">
-                  <span>Name</span><span>DNS</span><span>Protocol</span><span>Status</span>
-                </div>
+              <div className="cl-resource-grid">
                 {(lbsData?.loadBalancers ?? []).length === 0 && (
-                  <div className="gcp-table-row cl-console-empty">No load balancers yet.</div>
+                  <div className="cl-resource-card cl-resource-card--empty">No load balancers yet.</div>
                 )}
                 {(lbsData?.loadBalancers ?? []).map((lb) => (
-                  <div key={lb.id} className="gcp-table-row cl-table-4">
-                    <span className="gcp-service">{lb.name}</span>
-                    <span className="gcp-muted">{lb.dnsName ?? '—'}</span>
-                    <span>{lb.protocol}:{lb.port}</span>
-                    <span className={`gcp-status gcp-status-${lb.status}`}>{lb.status}</span>
-                    <button type="button" className="cl-console-row-action" onClick={() => handleDeleteLb(lb.id)} disabled={busy}>Delete</button>
-                  </div>
+                  <article key={lb.id} className="cl-resource-card">
+                    <header className="cl-resource-card-head">
+                      <span className="gcp-service">{lb.name}</span>
+                      <span className={`gcp-status gcp-status-${lb.status}`}>{lb.status}</span>
+                    </header>
+                    <dl className="cl-resource-meta">
+                      <div><dt>Protocol</dt><dd>{lb.protocol}:{lb.port}</dd></div>
+                      <div><dt>DNS</dt><dd>{lb.dnsName ?? '—'}</dd></div>
+                      {lb.dnsName && (
+                        <div className="cl-resource-full">
+                          <dt>Test</dt>
+                          <dd><code>curl -H &quot;Host: {lb.dnsName}&quot; http://localhost:8080/</code></dd>
+                        </div>
+                      )}
+                    </dl>
+                    <footer className="cl-resource-actions">
+                      <button type="button" className="cl-console-row-action" onClick={() => handleDeleteLb(lb.id)} disabled={busy}>Delete</button>
+                    </footer>
+                  </article>
                 ))}
               </div>
             </>
@@ -1432,32 +1533,49 @@ export default function ConsolePage() {
               </form>
               <p className="gcp-muted">
                 Shared Postgres (:5433) / MySQL (:3307) or dedicated Docker SQL. Automated daily backups to MinIO.
-                Disk usage tracked against sizeGb quota.
+                Terminal: <code>db create --name app-db --dedicated</code>
               </p>
-              <div className="gcp-table">
-                <div className="gcp-table-row gcp-table-head cl-table-5">
-                  <span>Name</span><span>Engine</span><span>Disk</span><span>Endpoint</span><span>Status</span>
-                </div>
+              <div className="cl-resource-grid">
                 {(dbsData?.instances ?? []).length === 0 && (
-                  <div className="gcp-table-row cl-console-empty">No database instances yet.</div>
+                  <div className="cl-resource-card cl-resource-card--empty">No database instances yet.</div>
                 )}
-                {(dbsData?.instances ?? []).map((inst) => (
-                  <div key={inst.id} className="gcp-table-row cl-table-5">
-                    <span className="gcp-service">{inst.name}{inst.dedicated ? ' (dedicated)' : ''}</span>
-                    <span>{inst.engine} {inst.version}</span>
-                    <span className="gcp-muted">
-                      {inst.diskUsedMb != null ? `${inst.diskUsedMb} MB / ${inst.sizeGb} GB` : `— / ${inst.sizeGb} GB`}
-                    </span>
-                    <span className="gcp-muted">{inst.endpoint ?? '—'}</span>
-                    <span className={`gcp-status gcp-status-${inst.status}`}>{inst.status}</span>
-                    <button type="button" className="cl-console-row-action" onClick={() => handleRevealDb(inst.id)} disabled={busy}>Reveal</button>
-                    <button type="button" className="cl-console-row-action" onClick={() => handleBackupDb(inst.id)} disabled={busy}>Backup</button>
-                    <button type="button" className="cl-console-row-action" onClick={() => handleDeleteDb(inst.id)} disabled={busy}>Delete</button>
-                    {revealedDb?.id === inst.id && (
-                      <span className="gcp-muted cl-console-status-msg">{revealedDb.connectionString}</span>
-                    )}
-                  </div>
-                ))}
+                {(dbsData?.instances ?? []).map((inst) => {
+                  const diskPct = inst.diskUsedMb != null && inst.sizeGb > 0
+                    ? Math.min(100, Math.round((inst.diskUsedMb / (inst.sizeGb * 1024)) * 100))
+                    : 0
+                  return (
+                    <article key={inst.id} className="cl-resource-card">
+                      <header className="cl-resource-card-head">
+                        <span className="gcp-service">{inst.name}{inst.dedicated ? ' · dedicated' : ''}</span>
+                        <span className={`gcp-status gcp-status-${inst.status}`}>{inst.status}</span>
+                      </header>
+                      <dl className="cl-resource-meta">
+                        <div><dt>Engine</dt><dd>{inst.engine} {inst.version}</dd></div>
+                        <div><dt>Endpoint</dt><dd>{inst.endpoint ?? 'provisioning…'}</dd></div>
+                        <div className="cl-resource-full">
+                          <dt>Disk</dt>
+                          <dd>
+                            {inst.diskUsedMb != null ? `${inst.diskUsedMb} MB / ${inst.sizeGb} GB` : `— / ${inst.sizeGb} GB`}
+                            <div className="cl-quota-bar cl-quota-bar--inline">
+                              <div className="cl-quota-bar-fill" style={{ width: `${diskPct}%` }} />
+                            </div>
+                          </dd>
+                        </div>
+                        {revealedDb?.id === inst.id && (
+                          <div className="cl-resource-full">
+                            <dt>Connection</dt>
+                            <dd><code>{revealedDb.connectionString}</code></dd>
+                          </div>
+                        )}
+                      </dl>
+                      <footer className="cl-resource-actions">
+                        <button type="button" className="cl-console-row-action" onClick={() => handleRevealDb(inst.id)} disabled={busy}>Reveal</button>
+                        <button type="button" className="cl-console-row-action" onClick={() => handleBackupDb(inst.id)} disabled={busy}>Backup</button>
+                        <button type="button" className="cl-console-row-action" onClick={() => handleDeleteDb(inst.id)} disabled={busy}>Delete</button>
+                      </footer>
+                    </article>
+                  )
+                })}
               </div>
             </>
           )}
@@ -1572,6 +1690,32 @@ export default function ConsolePage() {
             <div className="cl-gc-stub">
               <p>Third-party images and add-ons will land here. Deploy from Cloud Run in the meantime.</p>
             </div>
+          )}
+
+          {showSqlBackups && (
+            <>
+              <p className="gcp-muted">
+                Automated daily backups to MinIO (<code>cloudlane-db-backups</code>). Manual backup from Instances or terminal:{' '}
+                <code>db backup &lt;name&gt;</code>
+              </p>
+              <div className="gcp-table">
+                <div className="gcp-table-row gcp-table-head cl-table-5">
+                  <span>Instance</span><span>Backup ID</span><span>Status</span><span>Size</span><span>When</span>
+                </div>
+                {(sqlBackupsData ?? []).length === 0 && (
+                  <div className="gcp-table-row cl-console-empty">No backups yet — create an instance and run Backup.</div>
+                )}
+                {(sqlBackupsData ?? []).map((b) => (
+                  <div key={b.id} className="gcp-table-row cl-table-5">
+                    <span className="gcp-service">{b.instanceName}</span>
+                    <span className="gcp-muted">{b.id.slice(-8)}</span>
+                    <span className={`gcp-status gcp-status-${b.status}`}>{b.status}</span>
+                    <span>{Math.round((b.sizeBytes || 0) / 1024)} KB</span>
+                    <span className="gcp-muted">{b.createdAt ? new Date(b.createdAt).toLocaleString() : '—'}</span>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
 
           {showSqlGetStarted && (

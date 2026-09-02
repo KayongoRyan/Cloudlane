@@ -18,6 +18,7 @@ export {
   LB_TABS,
   SECRET_TABS,
   SQL_INSTANCE_TABS,
+  SQL_BACKUP_TABS,
   IAM_PROJECT_TABS,
   isAgentStubTab,
   isApisStubTab,

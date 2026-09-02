@@ -858,6 +858,7 @@ export const GATEWAY_TABS: ServiceId[] = ['gateway', 'gateway-routes', 'gateway-
 export const LB_TABS: ServiceId[] = ['lb', 'lb-load-balancers']
 export const SECRET_TABS: ServiceId[] = ['sec-secret-manager']
 export const SQL_INSTANCE_TABS: ServiceId[] = ['sql-instances']
+export const SQL_BACKUP_TABS: ServiceId[] = ['sql-backups']
 export const IAM_PROJECT_TABS: ServiceId[] = ['iam', 'iam-iam', 'iam-create-project', 'iam-manage-resources']
 export const COMPUTE_VM_TABS: ServiceId[] = ['compute', 'compute-vm-instances']
 export const K8S_DEPLOY_TABS: ServiceId[] = ['kubernetes', 'k8s-clusters', 'k8s-workloads']
@@ -936,7 +937,10 @@ export function isDatabasesStubTab(tab: ServiceId): boolean {
 }
 
 export function isSqlStubTab(tab: ServiceId): boolean {
-  return tab.startsWith('sql-') && !SQL_GET_STARTED_TABS.includes(tab) && !SQL_INSTANCE_TABS.includes(tab)
+  return tab.startsWith('sql-')
+    && !SQL_GET_STARTED_TABS.includes(tab)
+    && !SQL_INSTANCE_TABS.includes(tab)
+    && !SQL_BACKUP_TABS.includes(tab)
 }
 
 export function isOverviewTab(tab: ServiceId): boolean {
