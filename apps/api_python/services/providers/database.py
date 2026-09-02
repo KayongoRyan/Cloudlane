@@ -71,29 +71,33 @@ class LocalManagedDatabaseProvider:
             return False
         return False
 
-    def _pg_admin(self):
+    def _dedicated_admin_password(self, instance: dict) -> str:
+        from services.sql_dedicated import dedicated_admin_password
+        return dedicated_admin_password(instance['containerName'], instance.get('engine', 'postgres'))
+
+    def _pg_admin(self, *, host: str | None = None, port: int | None = None, user: str | None = None, password: str | None = None, dbname: str = 'postgres'):
         import psycopg
 
         settings = get_settings()
         return psycopg.connect(
-            host=settings.managed_postgres_host,
-            port=settings.managed_postgres_port,
-            user=settings.managed_postgres_admin_user,
-            password=settings.managed_postgres_admin_password,
-            dbname='postgres',
+            host=host or settings.managed_postgres_host,
+            port=port or settings.managed_postgres_port,
+            user=user or settings.managed_postgres_admin_user,
+            password=password or settings.managed_postgres_admin_password,
+            dbname=dbname,
             connect_timeout=5,
             autocommit=True,
         )
 
-    def _mysql_admin(self):
+    def _mysql_admin(self, *, host: str | None = None, port: int | None = None, user: str | None = None, password: str | None = None):
         import pymysql
 
         settings = get_settings()
         return pymysql.connect(
-            host=settings.managed_mysql_host,
-            port=settings.managed_mysql_port,
-            user=settings.managed_mysql_admin_user,
-            password=settings.managed_mysql_admin_password,
+            host=host or settings.managed_mysql_host,
+            port=port or settings.managed_mysql_port,
+            user=user or settings.managed_mysql_admin_user,
+            password=password or settings.managed_mysql_admin_password,
             connect_timeout=5,
             autocommit=True,
         )
@@ -106,10 +110,18 @@ class LocalManagedDatabaseProvider:
         size_gb: int,
         *,
         tenant_id: str,
+        dedicated: bool = False,
+        instance_id: str | None = None,
     ) -> dict:
         engine = (engine or 'postgres').lower()
         if engine not in ('postgres', 'mysql'):
             raise ManagedDatabaseError(f'Unsupported engine: {engine}')
+        if dedicated:
+            if not instance_id:
+                raise ManagedDatabaseError('dedicated instances require instance_id')
+            return self._provision_dedicated(
+                name, engine, version, size_gb, tenant_id=tenant_id, instance_id=instance_id,
+            )
         if not self.is_engine_ready(engine):
             raise ManagedDatabaseError(
                 f'{engine} managed engine is not reachable — '
@@ -145,19 +157,95 @@ class LocalManagedDatabaseProvider:
             'sizeGb': size_gb,
             'dbName': db_name,
             'username': username,
+            'dedicated': False,
             'status': 'available',
             'statusMessage': (
-                f'Real {engine} database provisioned on {host}:{port} '
-                f'(sizeGb is metadata only; Mongo remains the control plane)'
+                f'Shared {engine} database on {host}:{port} '
+                f'({size_gb} GB quota metadata; Mongo remains control plane)'
             ),
             'endpoint': f'{host}:{port}',
             'connectionString': conn,
         }
 
-    def deprovision(self, *, engine: str, db_name: str, username: str) -> None:
+    def _provision_dedicated(
+        self,
+        name: str,
+        engine: str,
+        version: str,
+        size_gb: int,
+        *,
+        tenant_id: str,
+        instance_id: str,
+    ) -> dict:
+        from services.sql_dedicated import create_dedicated_container
+
+        host, port, container, admin_password = create_dedicated_container(instance_id, engine, version)
+        db_name, username = _unique_names(tenant_id, name)
+        password = secrets.token_urlsafe(18)
+        settings = get_settings()
+
+        if engine == 'postgres':
+            self._provision_postgres(
+                db_name, username, password,
+                host=host, port=port,
+                admin_user='cloudlane_rds', admin_password=admin_password,
+            )
+            scheme = 'postgresql'
+            resolved_version = version or '16'
+        else:
+            self._provision_mysql(
+                db_name, username, password,
+                host=host, port=port,
+                admin_user='root', admin_password=admin_password,
+            )
+            scheme = 'mysql'
+            resolved_version = version or '8.0'
+
+        conn = (
+            f'{scheme}://{quote_plus(username)}:{quote_plus(password)}'
+            f'@{host}:{port}/{db_name}'
+        )
+        return {
+            'host': host,
+            'port': port,
+            'engine': engine,
+            'version': resolved_version,
+            'sizeGb': size_gb,
+            'dbName': db_name,
+            'username': username,
+            'dedicated': True,
+            'containerName': container,
+            'status': 'available',
+            'statusMessage': (
+                f'Dedicated {engine} container {container} on {host}:{port} '
+                f'({size_gb} GB quota metadata)'
+            ),
+            'endpoint': f'{host}:{port}',
+            'connectionString': conn,
+        }
+
+    def deprovision(self, *, engine: str, db_name: str, username: str, instance: dict | None = None) -> None:
         engine = (engine or 'postgres').lower()
         db_name = _safe_ident(db_name)
         username = _safe_ident(username)
+        if instance and instance.get('dedicated'):
+            if engine == 'postgres':
+                self._deprovision_postgres(
+                    db_name, username,
+                    host=instance['host'], port=instance['port'],
+                    admin_user='cloudlane_rds',
+                    admin_password=self._dedicated_admin_password(instance),
+                )
+            elif engine == 'mysql':
+                self._deprovision_mysql(
+                    db_name, username,
+                    host=instance['host'], port=instance['port'],
+                    admin_user='root',
+                    admin_password=self._dedicated_admin_password(instance),
+                )
+            from services.sql_dedicated import destroy_dedicated_container
+            destroy_dedicated_container(instance.get('containerName', ''))
+            return
         if engine == 'postgres':
             if not self.is_engine_ready('postgres'):
                 logger.warning('skip postgres deprovision — engine unreachable')
@@ -169,10 +257,19 @@ class LocalManagedDatabaseProvider:
                 return
             self._deprovision_mysql(db_name, username)
 
-    def _provision_postgres(self, db_name: str, username: str, password: str) -> None:
-        # Identifiers validated; passwords passed as bind params where supported.
+    def _provision_postgres(
+        self,
+        db_name: str,
+        username: str,
+        password: str,
+        *,
+        host: str | None = None,
+        port: int | None = None,
+        admin_user: str | None = None,
+        admin_password: str | None = None,
+    ) -> None:
         try:
-            with self._pg_admin() as conn:
+            with self._pg_admin(host=host, port=port, user=admin_user, password=admin_password) as conn:
                 with conn.cursor() as cur:
                     cur.execute(f'CREATE USER "{username}" WITH PASSWORD %s', (password,))
                     cur.execute(f'CREATE DATABASE "{db_name}" OWNER "{username}"')
@@ -180,7 +277,10 @@ class LocalManagedDatabaseProvider:
         except Exception as exc:
             # Best-effort rollback
             try:
-                self._deprovision_postgres(db_name, username)
+                self._deprovision_postgres(
+                    db_name, username,
+                    host=host, port=port, admin_user=admin_user, admin_password=admin_password,
+                )
             except Exception:
                 pass
             raise ManagedDatabaseError(f'Postgres provision failed: {exc}') from exc
@@ -191,10 +291,10 @@ class LocalManagedDatabaseProvider:
 
             settings = get_settings()
             with psycopg.connect(
-                host=settings.managed_postgres_host,
-                port=settings.managed_postgres_port,
-                user=settings.managed_postgres_admin_user,
-                password=settings.managed_postgres_admin_password,
+                host=host or settings.managed_postgres_host,
+                port=port or settings.managed_postgres_port,
+                user=admin_user or settings.managed_postgres_admin_user,
+                password=admin_password or settings.managed_postgres_admin_password,
                 dbname=db_name,
                 connect_timeout=5,
                 autocommit=True,
@@ -205,8 +305,17 @@ class LocalManagedDatabaseProvider:
         except Exception as exc:
             logger.warning('postgres schema grants partial: %s', exc)
 
-    def _deprovision_postgres(self, db_name: str, username: str) -> None:
-        with self._pg_admin() as conn:
+    def _deprovision_postgres(
+        self,
+        db_name: str,
+        username: str,
+        *,
+        host: str | None = None,
+        port: int | None = None,
+        admin_user: str | None = None,
+        admin_password: str | None = None,
+    ) -> None:
+        with self._pg_admin(host=host, port=port, user=admin_user, password=admin_password) as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     'SELECT pg_terminate_backend(pid) FROM pg_stat_activity '
@@ -216,9 +325,19 @@ class LocalManagedDatabaseProvider:
                 cur.execute(f'DROP DATABASE IF EXISTS "{db_name}"')
                 cur.execute(f'DROP ROLE IF EXISTS "{username}"')
 
-    def _provision_mysql(self, db_name: str, username: str, password: str) -> None:
+    def _provision_mysql(
+        self,
+        db_name: str,
+        username: str,
+        password: str,
+        *,
+        host: str | None = None,
+        port: int | None = None,
+        admin_user: str | None = None,
+        admin_password: str | None = None,
+    ) -> None:
         try:
-            conn = self._mysql_admin()
+            conn = self._mysql_admin(host=host, port=port, user=admin_user, password=admin_password)
             try:
                 with conn.cursor() as cur:
                     cur.execute(f'CREATE DATABASE `{db_name}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci')
@@ -237,8 +356,17 @@ class LocalManagedDatabaseProvider:
                 pass
             raise ManagedDatabaseError(f'MySQL provision failed: {exc}') from exc
 
-    def _deprovision_mysql(self, db_name: str, username: str) -> None:
-        conn = self._mysql_admin()
+    def _deprovision_mysql(
+        self,
+        db_name: str,
+        username: str,
+        *,
+        host: str | None = None,
+        port: int | None = None,
+        admin_user: str | None = None,
+        admin_password: str | None = None,
+    ) -> None:
+        conn = self._mysql_admin(host=host, port=port, user=admin_user, password=admin_password)
         try:
             with conn.cursor() as cur:
                 cur.execute(f'DROP DATABASE IF EXISTS `{db_name}`')

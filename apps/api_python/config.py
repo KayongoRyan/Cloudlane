@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     lb_base_domain: str = 'lb.cloudlane.run'
     lb_tcp_port_min: int = 19400
     lb_tcp_port_max: int = 19599
+    sql_dedicated_host: str = 'localhost'
+    sql_dedicated_port_min: int = 19600
+    sql_dedicated_port_max: int = 19699
+    database_backup_interval_hours: int = 24
+    database_backup_bucket: str = 'cloudlane-db-backups'
     # Managed SQL product (tenant RDS) — not the Mongo control plane
     managed_postgres_host: str = 'localhost'
     managed_postgres_port: int = 5433

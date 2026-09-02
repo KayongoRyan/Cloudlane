@@ -30,6 +30,10 @@ def build_quota_report(tenant_id: str) -> dict[str, Any]:
                 0,
                 int(limits['maxDatabaseInstances']) - int(usage['databaseInstances']),
             ),
+            'databaseStorageGb': max(
+                0,
+                int(limits.get('maxDatabaseStorageGb', 50)) - int(usage.get('databaseStorageGb', 0)),
+            ),
             'maxInstancesPerDeployment': limits['maxInstances'],
         },
     }
@@ -110,11 +114,21 @@ def assert_load_balancer_allowed(tenant_id: str) -> None:
         )
 
 
-def assert_database_allowed(tenant_id: str) -> None:
+def assert_database_allowed(tenant_id: str, *, additional_storage_gb: int = 0) -> None:
     limits = _limits_for_tenant(tenant_id)
     usage = db.summarize_tenant_usage(tenant_id)
     if int(usage['databaseInstances']) >= limits['maxDatabaseInstances']:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=f'Database instance limit reached ({limits["maxDatabaseInstances"]} max)',
+        )
+    max_storage = int(limits.get('maxDatabaseStorageGb', 50))
+    allocated = db.total_database_storage_gb(tenant_id) + additional_storage_gb
+    if allocated > max_storage:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f'Database storage quota exceeded — requested {allocated} GB, '
+                f'limit {max_storage} GB across instances'
+            ),
         )

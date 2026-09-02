@@ -65,9 +65,21 @@ def run_worker_loop() -> None:
     except Exception as exc:
         print(f'ensure_indexes warning: {exc}')
     print(f'Provision worker started (poll={settings.worker_poll_interval_seconds}s)')
+    last_backup_sweep = 0.0
+    backup_interval_s = max(settings.database_backup_interval_hours, 1) * 3600
     while True:
         job = db.claim_next_provision_job()
         if job:
             process_job(job)
-        else:
-            time.sleep(settings.worker_poll_interval_seconds)
+            continue
+        now = time.time()
+        if now - last_backup_sweep >= backup_interval_s:
+            last_backup_sweep = now
+            try:
+                from services.database_backup import sweep_due_backups
+                swept = sweep_due_backups()
+                if swept:
+                    print(f'database backup sweep completed ({swept} instances)')
+            except Exception as backup_exc:
+                print(f'database backup sweep skipped: {backup_exc}')
+        time.sleep(settings.worker_poll_interval_seconds)

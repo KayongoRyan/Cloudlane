@@ -2120,6 +2120,10 @@ button {
   grid-template-columns: 1fr 0.5fr 0.7fr 0.7fr 0.7fr auto;
 }
 
+.gcp-table-row.cl-table-5 {
+  grid-template-columns: 1fr 0.7fr 0.8fr 1fr 0.7fr auto auto auto;
+}
+
 .cl-console-empty {
   grid-column: 1 / -1;
   color: var(--cl-muted);

@@ -127,9 +127,12 @@ class DatabaseInstanceCreate(BaseModel):
     engine: str = Field(default='postgres', pattern='^(postgres|mysql)$')
     version: str = Field(default='16')
     sizeGb: int = Field(default=10, ge=5, le=1024)
+    dedicated: bool = False
+    autoBackup: bool = True
     projectId: str | None = None
 
 
 class DatabaseInstanceUpdate(BaseModel):
     status: str | None = Field(default=None, pattern='^(available|stopped|provisioning|failed)$')
     sizeGb: int | None = Field(default=None, ge=5, le=1024)
+    autoBackup: bool | None = None

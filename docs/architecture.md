@@ -117,7 +117,7 @@ Replace a single “customer-facing API” box with two distinct entry points:
 | Deployments | `/api/deployments` | `routes/deployments.py` | Live |
 | Projects | `/api/projects` | `routes/projects.py` | Live |
 | Object storage | `/api/buckets` | `routes/buckets.py` | Live |
-| GraphQL | `/graphql` | `routes/graphql.py` | Live (read subset) |
+| GraphQL | `/graphql` | `graphql_app.py` | Live (Strawberry queries + mutations) |
 | Secrets | `/api/secrets` | `routes/secrets.py` | Live |
 | Load balancers | `/api/load-balancers` | `routes/load_balancers.py` | Live (HTTP/HTTPS/TCP on gateway-proxy) |
 | Managed DBs | `/api/databases` | `routes/databases.py` | Live (real Postgres/MySQL on compose) |
@@ -289,8 +289,11 @@ Host ports `6380` / `9010` avoid conflicts when another Redis or MinIO already o
 
 ### Still open
 
-- Per-instance SQL containers / disk quotas / automated backups (beyond shared engines)
-- Full GraphQL schema (current `/graphql` is a thin query selector)
+Nothing blocking V1 — optional future work: gateway route mutations via GraphQL, GraphiQL UI.
+
+### GraphQL
+
+Done: Strawberry read schema + write mutations (deployments, buckets, secrets, LBs, databases, backups). See [docs/GRAPHQL.md](GRAPHQL.md).
 
 ### Load balancer L4 / TLS
 

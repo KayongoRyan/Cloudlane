@@ -135,10 +135,13 @@ interface DatabaseInstanceRow {
   engine: string
   version: string
   sizeGb: number
+  diskUsedMb?: number
+  dedicated?: boolean
   endpoint?: string
   status: string
   statusMessage?: string
   connectionString?: string
+  lastBackupAt?: string
 }
 
 interface Invoice {
@@ -250,7 +253,7 @@ export default function ConsolePage() {
   const [vmForm, setVmForm] = useState({ name: '', cpu: 1, memoryMb: 512 })
   const [secretForm, setSecretForm] = useState({ name: '', value: '' })
   const [lbForm, setLbForm] = useState({ name: '', protocol: 'HTTP', port: 80, targetDeploymentId: '' })
-  const [dbForm, setDbForm] = useState({ name: '', engine: 'postgres', version: '16', sizeGb: 10 })
+  const [dbForm, setDbForm] = useState({ name: '', engine: 'postgres', version: '16', sizeGb: 10, dedicated: false })
   const [revealedSecret, setRevealedSecret] = useState<{ id: string; value: string } | null>(null)
   const [revealedOpsSecret, setRevealedOpsSecret] = useState<{ name: string; value: string } | null>(null)
   const [revealedDb, setRevealedDb] = useState<{ id: string; connectionString: string } | null>(null)
@@ -673,7 +676,7 @@ export default function ConsolePage() {
     setError('')
     try {
       await apiSend('/api/databases', 'POST', { ...dbForm, projectId: projectId || undefined })
-      setDbForm({ name: '', engine: 'postgres', version: '16', sizeGb: 10 })
+      setDbForm({ name: '', engine: 'postgres', version: '16', sizeGb: 10, dedicated: false })
       await mutateDbs()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Create database failed')
@@ -690,6 +693,19 @@ export default function ConsolePage() {
       setRevealedDb({ id, connectionString: res.instance.connectionString || '' })
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Reveal connection failed')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleBackupDb = async (id: string) => {
+    setBusy(true)
+    setError('')
+    try {
+      await apiSend(`/api/databases/${id}/backups`, 'POST')
+      await mutateDbs()
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Backup failed')
     } finally {
       setBusy(false)
     }
@@ -1408,26 +1424,34 @@ export default function ConsolePage() {
                 </select>
                 <input value={dbForm.version} onChange={(e) => setDbForm({ ...dbForm, version: e.target.value })} />
                 <input type="number" min={5} max={1024} value={dbForm.sizeGb} onChange={(e) => setDbForm({ ...dbForm, sizeGb: parseInt(e.target.value, 10) || 10 })} />
+                <label className="gcp-muted">
+                  <input type="checkbox" checked={dbForm.dedicated} onChange={(e) => setDbForm({ ...dbForm, dedicated: e.target.checked })} />
+                  {' '}Dedicated container (:19600–19699)
+                </label>
                 <button type="submit" className="gcp-btn-primary gcp-btn-compact" disabled={busy}>Create instance</button>
               </form>
               <p className="gcp-muted">
-                Real Postgres (:5433) / MySQL (:3307) via compose. Connection string encrypted at rest — Reveal once to copy.
-                Control plane stays on MongoDB.
+                Shared Postgres (:5433) / MySQL (:3307) or dedicated Docker SQL. Automated daily backups to MinIO.
+                Disk usage tracked against sizeGb quota.
               </p>
               <div className="gcp-table">
-                <div className="gcp-table-row gcp-table-head cl-table-4">
-                  <span>Name</span><span>Engine</span><span>Endpoint</span><span>Status</span>
+                <div className="gcp-table-row gcp-table-head cl-table-5">
+                  <span>Name</span><span>Engine</span><span>Disk</span><span>Endpoint</span><span>Status</span>
                 </div>
                 {(dbsData?.instances ?? []).length === 0 && (
                   <div className="gcp-table-row cl-console-empty">No database instances yet.</div>
                 )}
                 {(dbsData?.instances ?? []).map((inst) => (
-                  <div key={inst.id} className="gcp-table-row cl-table-4">
-                    <span className="gcp-service">{inst.name}</span>
+                  <div key={inst.id} className="gcp-table-row cl-table-5">
+                    <span className="gcp-service">{inst.name}{inst.dedicated ? ' (dedicated)' : ''}</span>
                     <span>{inst.engine} {inst.version}</span>
+                    <span className="gcp-muted">
+                      {inst.diskUsedMb != null ? `${inst.diskUsedMb} MB / ${inst.sizeGb} GB` : `— / ${inst.sizeGb} GB`}
+                    </span>
                     <span className="gcp-muted">{inst.endpoint ?? '—'}</span>
                     <span className={`gcp-status gcp-status-${inst.status}`}>{inst.status}</span>
                     <button type="button" className="cl-console-row-action" onClick={() => handleRevealDb(inst.id)} disabled={busy}>Reveal</button>
+                    <button type="button" className="cl-console-row-action" onClick={() => handleBackupDb(inst.id)} disabled={busy}>Backup</button>
                     <button type="button" className="cl-console-row-action" onClick={() => handleDeleteDb(inst.id)} disabled={busy}>Delete</button>
                     {revealedDb?.id === inst.id && (
                       <span className="gcp-muted cl-console-status-msg">{revealedDb.connectionString}</span>

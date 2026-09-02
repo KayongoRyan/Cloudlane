@@ -24,7 +24,7 @@ from routes.secrets import router as secrets_router
 from routes.ops_secrets import router as ops_secrets_router
 from routes.load_balancers import router as load_balancers_router
 from routes.databases import router as databases_router
-from routes.graphql import router as graphql_router
+from graphql_app import graphql_router
 from middleware.control_plane_gateway import (
     ApiVersionMiddleware,
     ControlPlaneRateLimitMiddleware,

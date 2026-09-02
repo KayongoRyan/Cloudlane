@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 from urllib.parse import urlparse
 
@@ -21,6 +21,7 @@ DEFAULT_TENANT_LIMITS = {
     'maxSecrets': 50,
     'maxLoadBalancers': 5,
     'maxDatabaseInstances': 3,
+    'maxDatabaseStorageGb': 50,
 }
 
 _client: MongoClient | None = None
@@ -93,6 +94,10 @@ def map_limits(raw: Any) -> dict[str, int]:
         'maxDatabaseInstances': data.get(
             'maxDatabaseInstances',
             DEFAULT_TENANT_LIMITS['maxDatabaseInstances'],
+        ),
+        'maxDatabaseStorageGb': data.get(
+            'maxDatabaseStorageGb',
+            DEFAULT_TENANT_LIMITS['maxDatabaseStorageGb'],
         ),
     }
 
@@ -259,6 +264,11 @@ def map_database_instance(doc: dict[str, Any], *, include_connection: bool = Fal
         'engine': doc.get('engine', 'postgres'),
         'version': doc.get('version', '16'),
         'sizeGb': doc.get('sizeGb', 10),
+        'diskUsedMb': doc.get('diskUsedMb'),
+        'dedicated': bool(doc.get('dedicated', False)),
+        'containerName': doc.get('containerName'),
+        'autoBackup': doc.get('autoBackup', True),
+        'lastBackupAt': doc.get('lastBackupAt'),
         'host': doc.get('host'),
         'port': doc.get('port'),
         'endpoint': doc.get('endpoint'),
@@ -451,6 +461,8 @@ def ensure_indexes() -> None:
     col('system_secrets').create_index('name', unique=True)
     col('load_balancers').create_index([('tenantId', 1), ('name', 1)], unique=True)
     col('database_instances').create_index([('tenantId', 1), ('name', 1)], unique=True)
+    col('database_instances').create_index([('dedicated', 1), ('port', 1)], sparse=True)
+    col('database_backups').create_index([('tenantId', 1), ('instanceId', 1), ('createdAt', -1)])
     col('gateways').create_index([('tenantId', 1), ('slug', 1)], unique=True)
     col('gateways').create_index('tenantId')
     col('gateways').create_index('projectId')
@@ -624,6 +636,7 @@ def summarize_tenant_usage(tenant_id: str) -> dict[str, int | float]:
         'secrets': count_secrets(tenant_id),
         'loadBalancers': count_load_balancers(tenant_id),
         'databaseInstances': count_database_instances(tenant_id),
+        'databaseStorageGb': total_database_storage_gb(tenant_id),
     }
 
 
@@ -1344,6 +1357,11 @@ def create_database_instance(input_data: dict[str, Any]) -> dict[str, Any]:
         'engine': input_data.get('engine', 'postgres'),
         'version': input_data.get('version', '16'),
         'sizeGb': input_data.get('sizeGb', 10),
+        'diskUsedMb': input_data.get('diskUsedMb'),
+        'dedicated': bool(input_data.get('dedicated', False)),
+        'containerName': input_data.get('containerName'),
+        'autoBackup': input_data.get('autoBackup', True),
+        'lastBackupAt': input_data.get('lastBackupAt'),
         'host': input_data.get('host'),
         'port': input_data.get('port'),
         'endpoint': input_data.get('endpoint'),
@@ -1377,6 +1395,89 @@ def delete_database_instance(instance_id: str, tenant_id: str) -> bool:
         return False
     result = col('database_instances').delete_one({'_id': as_object_id(instance_id), **tenant_clause(tenant_id)})
     return result.deleted_count == 1
+
+
+def list_dedicated_database_ports() -> list[int]:
+    ports: list[int] = []
+    for doc in col('database_instances').find({'dedicated': True, 'port': {'$exists': True}}, {'port': 1}):
+        if doc.get('port'):
+            ports.append(int(doc['port']))
+    return ports
+
+
+def total_database_storage_gb(tenant_id: str) -> int:
+    total = 0
+    for doc in col('database_instances').find(tenant_clause(tenant_id), {'sizeGb': 1}):
+        total += int(doc.get('sizeGb', 0) or 0)
+    return total
+
+
+def map_database_backup(doc: dict[str, Any]) -> dict[str, Any]:
+    return {
+        'id': ref_str(doc['_id']),
+        'tenantId': ref_str(doc['tenantId']),
+        'instanceId': ref_str(doc['instanceId']),
+        'status': doc.get('status', 'running'),
+        'trigger': doc.get('trigger', 'manual'),
+        'sizeBytes': doc.get('sizeBytes', 0),
+        'objectKey': doc.get('objectKey'),
+        'statusMessage': doc.get('statusMessage'),
+        'createdAt': doc.get('createdAt'),
+        'completedAt': doc.get('completedAt'),
+    }
+
+
+def create_database_backup(input_data: dict[str, Any]) -> dict[str, Any]:
+    now = datetime.now(timezone.utc)
+    doc = {
+        'tenantId': oid_or_raw(input_data['tenantId']),
+        'instanceId': oid_or_raw(input_data['instanceId']),
+        'status': input_data.get('status', 'running'),
+        'trigger': input_data.get('trigger', 'manual'),
+        'sizeBytes': input_data.get('sizeBytes', 0),
+        'objectKey': input_data.get('objectKey'),
+        'statusMessage': input_data.get('statusMessage'),
+        'createdAt': now,
+        'completedAt': input_data.get('completedAt'),
+    }
+    result = col('database_backups').insert_one(doc)
+    doc['_id'] = result.inserted_id
+    return map_database_backup(doc)
+
+
+def update_database_backup(backup_id: str, tenant_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    if not is_object_id_string(backup_id):
+        return None
+    payload = {**updates, 'updatedAt': datetime.now(timezone.utc)}
+    doc = col('database_backups').find_one_and_update(
+        {'_id': as_object_id(backup_id), **tenant_clause(tenant_id)},
+        {'$set': payload},
+        return_document=ReturnDocument.AFTER,
+    )
+    return map_database_backup(doc) if doc else None
+
+
+def list_database_backups(tenant_id: str, instance_id: str) -> list[dict[str, Any]]:
+    filt = {
+        **tenant_clause(tenant_id),
+        'instanceId': oid_or_raw(instance_id),
+    }
+    docs = col('database_backups').find(filt).sort('createdAt', -1)
+    return [map_database_backup(doc) for doc in docs]
+
+
+def list_instances_due_for_backup(interval_hours: int) -> list[dict[str, Any]]:
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=interval_hours)
+    filt = {
+        'status': 'available',
+        'autoBackup': {'$ne': False},
+        '$or': [
+            {'lastBackupAt': {'$exists': False}},
+            {'lastBackupAt': {'$lt': cutoff}},
+        ],
+    }
+    docs = col('database_instances').find(filt)
+    return [map_database_instance(doc) for doc in docs]
 
 
 def find_system_secret_by_name(name: str, *, include_value: bool = False) -> dict[str, Any] | None:

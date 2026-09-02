@@ -467,7 +467,7 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 
 ### Phase 2 — Polish
 - Audit log viewer, alerting, Loki
-- SQL backups / dedicated instances
+- GraphiQL / gateway mutations via GraphQL (optional)
 - Full GraphQL schema
 
 ### Phase 3 — Broader surface
@@ -482,4 +482,4 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 
 ## Status
 
-V1 control plane in **FastAPI** + **Next.js console**. API Gateway, async provisioning, quotas, provider drivers, **secret vaults**, **HTTP/HTTPS/TCP load balancers**, **managed Postgres/MySQL**, **KEDA scale-to-zero**, **IremboPay billing**, and a thin **GraphQL** read API are live. Next: full GraphQL, SQL polish — see [docs/architecture.md](docs/architecture.md).
+V1 control plane in **FastAPI** + **Next.js console**. API Gateway, async provisioning, quotas, provider drivers, **secret vaults**, **HTTP/HTTPS/TCP load balancers**, **managed SQL with backups**, **KEDA scale-to-zero**, **IremboPay billing**, and a **Strawberry GraphQL** read API are live. See [docs/architecture.md](docs/architecture.md).

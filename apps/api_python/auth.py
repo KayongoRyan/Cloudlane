@@ -63,6 +63,22 @@ async def authenticate_request(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)] = None,
     x_api_key: Annotated[str | None, Header(alias='X-API-Key')] = None,
 ) -> AuthContext:
+    return await resolve_auth(request, credentials=credentials, x_api_key=x_api_key)
+
+
+async def resolve_auth(
+    request: Request,
+    *,
+    credentials: HTTPAuthorizationCredentials | None = None,
+    x_api_key: str | None = None,
+) -> AuthContext:
+    if x_api_key is None:
+        x_api_key = request.headers.get('x-api-key')
+    if credentials is None:
+        auth_header = request.headers.get('authorization', '')
+        if auth_header.lower().startswith('bearer '):
+            from fastapi.security import HTTPAuthorizationCredentials as Creds
+            credentials = Creds(scheme='Bearer', credentials=auth_header[7:].strip())
     if x_api_key:
         prefix = x_api_key[:8]
         record = find_api_key(prefix, hash_api_key(x_api_key))
