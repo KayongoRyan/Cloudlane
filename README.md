@@ -20,33 +20,37 @@ cloudlane deploy --image myrepo/app:v1 --port 8080
 
 ## How it works
 
-Two front doors: **management plane** (dashboard/CLI → FastAPI) and **data plane** (tenant API consumers → Nginx gateway-proxy).
+Two front doors: **management plane** (dashboard / Cloudlane Terminal / CLI → FastAPI) and **data plane** (tenant API consumers → Nginx gateway-proxy).
 
 ```
-Dashboard / CLI / automation
+Dashboard · Cloudlane Terminal · CLI · GraphQL
         │
         ▼
 Control plane API (:8001)  ──►  MongoDB (Atlas prod / compose local)
   JWT + cl_* platform keys        tenants · projects · deployments
-  rate limit (Redis)              gateways · provision_jobs · …
+  rate limit (Redis)              gateways · LBs · SQL · secrets · …
         │
         ├── POST /api/deployments → 202 + provision_jobs queue
         │         └── provision-worker → K8s (optional) → publicUrl
         │
-        └── /api/gateways CRUD → nginx conf → gateway-proxy (:8080)
-                    │
-                    └── gw_* keys · auth_request · proxy to deployment
+        ├── /api/gateways CRUD → nginx conf → gateway-proxy (:8080)
+        │         └── gw_* keys · auth_request · proxy to deployment
+        │
+        ├── /api/load-balancers → HTTP :8080 · HTTPS :8443 · TCP :19400–19599
+        │
+        └── /api/databases → shared Postgres/MySQL or dedicated containers
+                  └── backups → MinIO (cloudlane-db-backups)
 
 Tenant API clients
         │
         ▼
-gateway-proxy (Nginx :8080)  ──►  deployment.publicUrl (*.cloudlane.run)
+gateway-proxy (Nginx)  ──►  deployment.publicUrl (*.cloudlane.run)
         │
         ▼
 IremboPay (metered billing — tenants.irembopayCustomerId reserved)
 ```
 
-Customers never see Kubernetes — one `deploy` command, same as Cloud Run hiding GKE. Deploy is **async**: API enqueues a job; `provision-worker` provisions and updates status.
+Customers never see Kubernetes — one `deploy` command, same as Cloud Run hiding GKE. Deploy is **async**: API enqueues a job; `provision-worker` provisions and updates status. The **Cloudlane Terminal** in the console runs the same control-plane commands in-browser (`deploy`, `db`, `lb`, `gateway`, `quota`, `graphql`, …).
 
 Full architecture: [docs/architecture.md](docs/architecture.md).
 
@@ -60,8 +64,9 @@ tenants 1──has──* users
         1──owns──* deployments
         1──creates──* api_keys
         1──owns──* gateways
-projects 1──groups──* deployments · gateways · buckets
+projects 1──groups──* deployments · gateways · buckets · load_balancers · database_instances
 gateways 1──has──* gateway_routes · gateway_keys
+database_instances 1──has──* database_backups
 deployments 1──produces──* usage_metrics
 users   1──triggers──* audit_logs
 ```
@@ -76,6 +81,10 @@ users   1──triggers──* audit_logs
 | `gateways` | tenantId, projectId, name, slug, hostname, status, createdAt |
 | `gateway_routes` | gatewayId, path, method, deploymentId, createdAt |
 | `gateway_keys` | gatewayId, name, keyHash, prefix, status, createdAt |
+| `load_balancers` | tenantId, projectId, name, protocol (HTTP/HTTPS/TCP), port, dnsName, targetDeploymentId, status |
+| `database_instances` | tenantId, projectId, name, engine, version, sizeGb, diskUsedMb, dedicated, endpoint, status |
+| `database_backups` | instanceId, status, sizeBytes, trigger, objectKey, createdAt |
+| `secrets` | tenantId, projectId, name, version, ciphertext |
 | `api_keys` | tenantId, userId, name, keyHash, prefix, scopes, expiresAt, lastUsedAt |
 | `buckets` | tenantId, projectId, name, createdAt |
 | `audit_logs` | tenantId, userId, action, resourceType, resourceId, changes, ipAddress, createdAt |
@@ -104,12 +113,15 @@ Bearer JWT or `X-API-Key` (`cl_*` platform keys). Gateway consumer keys (`gw_*`)
 | `GET/POST` | `/api/ops/secrets` (+ migrate) | JWT **admin** (control-plane vault) |
 | `GET/POST` | `/api/load-balancers` | JWT / API key |
 | `GET/POST` | `/api/databases` | JWT / API key |
-| `POST` | `/graphql` | JWT / API key (read subset) |
+| `GET/POST` | `/api/databases/:id/backups` | JWT / API key |
+| `POST` | `/graphql` | JWT / API key (queries + mutations) |
 | `GET` | `/api/billing`, `/api/monitoring`, `/api/quota` | JWT / API key |
 | `GET` | `/internal/gateway/validate` | Nginx `auth_request` (edge) |
 | `GET` | `/health`, `/health/encryption` | public (no DB) |
 
 `POST /api/api-keys` returns the plaintext key **once**. Register and deploy write `audit_logs`.
+
+**Cloudlane Terminal** (console top bar) wraps these APIs: `status`, `quota`, `monitor`, `deployments list`, `deploy create|delete`, `logs`, `db list|create|backup|reveal`, `lb list|create|delete`, `gateway list|create`, `secret list|create`, `bucket list|create|objects`, `vm list|create`, `billing`, `audit list`, `graphql <query>`.
 
 ## Languages
 
@@ -288,7 +300,8 @@ API Gateway ──► Authentication · IAM · Organizations · Projects
 | **Backups** | Snapshots and restore for storage and databases |
 | **Billing** | Metered usage, invoices, IremboPay settlement |
 | **Marketplace** | Discover and install partner / curated images and add-ons |
-| **Developer CLI** | `cloudlane` — login, deploy, list, logs from the terminal |
+| **Developer CLI** | `cloudlane` — login, deploy, list, logs from the shell |
+| **Cloudlane Terminal** | In-browser control-plane CLI in the console (same APIs as CLI) |
 | **SDK** | Typed client libraries for the public API |
 
 Identity and tenancy flow: **Organization → Project → IAM → resources**. Every VM, bucket, DB, and DNS zone lives under a project; Billing meters usage; Monitoring and Logging attach to the same resource IDs.
@@ -338,8 +351,11 @@ Rust       ──► performance · security · storage · net
 | API | Python FastAPI (+ Mangum on Netlify) |
 | Async provision | `worker.py` + `provision_jobs` (compose `provision-worker`) |
 | Customer API edge | Nginx `gateway-proxy` + Redis rate limits |
-| Dashboard / CLI / SDK | TypeScript (Next.js 14, Commander.js) |
+| Dashboard / Terminal / CLI | TypeScript (Next.js 14 console + Cloudlane Terminal, Commander.js CLI) |
+| GraphQL | Strawberry (`POST /graphql` queries + mutations) |
 | Control-plane DB | MongoDB (Atlas in prod, `docker compose` locally) |
+| Managed SQL | Shared Postgres `:5433` / MySQL `:3307` or dedicated Docker (`:19600–19699`); backups → MinIO |
+| Load balancers | HTTP `:8080`, HTTPS TLS `:8443`, TCP `:19400–19599` on `gateway-proxy` |
 | Auth | JWT + platform keys (`cl_*`) + gateway keys (`gw_*`) |
 | Billing | IremboPay invoice API + webhook (see docs/IREMBOPAY.md) |
 
@@ -362,19 +378,20 @@ Rust       ──► performance · security · storage · net
 ```
 cloudlane/
 ├── apps/
-│   ├── api_python/      # FastAPI control plane + worker.py
-│   ├── api/             # legacy Node API (deprecated)
-│   └── dashboard/       # Next.js dashboard (Vercel)
+│   ├── api_python/      # FastAPI control plane + worker.py + GraphQL
+│   ├── api/             # legacy Node API (deprecated — do not point dashboard here)
+│   └── dashboard/       # Next.js console + Cloudlane Terminal (Vercel)
 ├── packages/
 │   ├── cli/             # `cloudlane` CLI
 │   └── shared/          # Shared TypeScript types
 ├── infra/
-│   ├── nginx/           # gateway-proxy base + gateways/*.conf + lbs/*.conf
+│   ├── nginx/           # gateway-proxy + gateways/*.conf + lbs/*.conf + lb-stream/
 │   └── prometheus/
 ├── docs/
 │   ├── architecture.md  # dual-gateway model, layers, status
+│   ├── LB.md · MANAGED_SQL.md · GRAPHQL.md · KEDA.md · IREMBOPAY.md
 │   └── DEPLOYMENT.md
-├── docker-compose.yml   # mongo, minio, redis, gateway-proxy, worker, …
+├── docker-compose.yml   # mongo, minio, redis, SQL, gateway-proxy, worker, …
 └── README.md
 ```
 
@@ -387,8 +404,16 @@ Python 3.11+, Node 20+, Docker.
 1. Copy env files:
    - Root `.env` → `MONGO_PASSWORD` (used by compose)
    - `apps/api_python/.env` from `apps/api_python/.env.example`
+   - `apps/dashboard/.env.local` from `apps/dashboard/.env.example`
 
-2. Match credentials — compose creates Mongo user `cloudlane` with `MONGO_PASSWORD`. URL-encode special chars in `DATABASE_URL` (`#` → `%23`):
+2. **Dashboard must target the Python API** (not the legacy Node `:3001` / old Netlify Node deploy):
+
+```
+# apps/dashboard/.env.local
+NEXT_PUBLIC_API_URL=http://localhost:8001
+```
+
+3. Match API credentials — compose creates Mongo user `cloudlane` with `MONGO_PASSWORD`. URL-encode special chars in `DATABASE_URL` (`#` → `%23`):
 
 ```
 DATABASE_URL=mongodb://cloudlane:<password>@localhost:27017/cloudlane?authSource=admin
@@ -403,17 +428,23 @@ MINIO_ENDPOINT=localhost:9010
 docker compose up -d          # mongo, minio, redis, managed-postgres/mysql, gateway-proxy, …
 npm install
 cd apps/api_python && pip install -r requirements.txt
-npm run dev                   # API :8001 + dashboard :3000 (uses python -m uvicorn)
+# Terminal A — control plane
+cd apps/api_python && python -m uvicorn main:app --reload --port 8001
+# Terminal B — dashboard
+cd apps/dashboard && npm run dev
+# or: npm run dev from repo root if wired for both
 ```
 
 | Service | Port |
 |---|---|
-| FastAPI | 8001 |
+| FastAPI (control plane) | 8001 |
 | Dashboard | 3000 |
-| gateway-proxy | 8080 |
+| gateway-proxy HTTP / HTTPS | 8080 / 8443 |
+| gateway-proxy TCP LB range | 19400–19599 |
 | MongoDB (control plane) | 27017 |
-| Managed Postgres (tenant RDS) | 5433 |
-| Managed MySQL (tenant RDS) | 3307 |
+| Managed Postgres (tenant SQL) | 5433 |
+| Managed MySQL (tenant SQL) | 3307 |
+| Dedicated SQL containers | 19600–19699 |
 | Redis | 6380 |
 | MinIO API / console | 9010 / 9011 |
 | Prometheus / Grafana | 9090 / 3002 |
@@ -424,21 +455,23 @@ Run the worker separately (or rely on compose `provision-worker`):
 cd apps/api_python && python worker.py
 ```
 
+After changing `NEXT_PUBLIC_API_URL`, **restart Next.js** and **log in again** so the JWT matches that API host. In the console, select a project, then open **Cloudlane Terminal** → `status` (should report `python (full control plane)` + valid auth).
+
 Optional: set `KUBECONFIG` for real K8s provisioning; without it deployments stay `pending`.  
 For autoscaling / scale-to-zero, install KEDA on the cluster — [docs/KEDA.md](docs/KEDA.md).
 
-Dashboard on localhost hits `:8001`; production hits the Netlify API.
+More: [docs/LB.md](docs/LB.md) · [docs/MANAGED_SQL.md](docs/MANAGED_SQL.md) · [docs/GRAPHQL.md](docs/GRAPHQL.md).
 
 ## Production
 
 | App | Host | Root |
 |---|---|---|
 | Dashboard | Vercel (`cloudlane-dashboard`) | `apps/dashboard` |
-| API | Netlify | `apps/api_python` |
+| API | Netlify | `apps/api_python` (Python — not `apps/api`) |
 
 Netlify: base `apps/api_python`, build `pip install -r requirements.txt`, publish `public`, functions `netlify/functions`. Env: `DATABASE_URL` (Atlas, set in the UI only), `JWT_SECRET`. Atlas Network Access: `0.0.0.0/0`. Production branch: `develop`.
 
-Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after changing it.
+Vercel: `NEXT_PUBLIC_API_URL` = Netlify Python URL, no trailing slash. Redeploy after changing it. If `/api/databases` 404s or health lacks `encryption`, the site is still on the legacy Node function — redeploy from `apps/api_python`.
 
 ## Build phases
 
@@ -446,29 +479,32 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 - [x] Multi-tenant Mongo ERD (tenants, users, deployments, api_keys, audit_logs, usage_metrics)
 - [x] JWT + API key auth (+ scopes on deploy routes)
 - [x] Dashboard signup/login + deploy modal + **console** (`/dashboard/console`)
+- [x] **Cloudlane Terminal** — in-browser control-plane CLI (deploy, db, lb, gateway, graphql, …)
 - [x] CLI (`login` returns API key, `deploy`, `logs`, `list`)
 - [x] K8s Service + Ingress in Python API (honest `pending`/`failed` without cluster)
 - [x] Deployment list, get, soft-delete, logs stub/stream
 - [x] Projects collection + APIs + dashboard project switcher
 - [x] API keys dashboard (create/revoke, plaintext once)
-- [x] MinIO in compose + bucket APIs + dashboard storage tab
+- [x] MinIO in compose + bucket APIs + object browser in console
 - [x] Usage metering (`compute_seconds`) + billing/invoices + IremboPay sandbox
 - [x] Monitoring summary + usage charts in console; Prometheus/Grafana in compose
 - [x] VM lifecycle API (stub IP; hypervisor deferred)
 - [x] **API Gateway** — CRUD, Nginx edge (`gateway-proxy`), `gw_*` keys, Redis rate limits
 - [x] **Async deploy orchestrator** — `provision_jobs`, worker, `POST /api/deployments` → 202
-- [x] **Quota service** — CPU/memory at max scale, deploy count, buckets; `GET /api/quota` + Hub Quotas UI
+- [x] **Quota service** — CPU/memory at max scale, deploy count, buckets, SQL disk; `GET /api/quota`
 - [x] **Provider drivers** — `services/providers` (K8s compute, MinIO storage)
 - [x] **Secret Vaults** — tenant `/api/secrets` + ops vault `/api/ops/secrets` (Cloudlane secret migration)
-- [x] **Load Balancing** — `/api/load-balancers` + HTTP/HTTPS/TCP on `gateway-proxy` ([docs/LB.md](docs/LB.md))
-- [x] **Managed DBs + GraphQL** — real Postgres/MySQL on compose + `/graphql` read API
+- [x] **Load Balancing** — HTTP/HTTPS/TCP on `gateway-proxy` ([docs/LB.md](docs/LB.md))
+- [x] **Managed SQL** — shared + dedicated containers, disk quotas, MinIO backups ([docs/MANAGED_SQL.md](docs/MANAGED_SQL.md))
+- [x] **GraphQL** — Strawberry schema with queries + mutations ([docs/GRAPHQL.md](docs/GRAPHQL.md))
 - [x] **Scale-to-zero (KEDA)** — ScaledObject on provision; optional HTTP add-on (see docs/KEDA.md)
 - [x] **IremboPay production charges** — real invoice API + webhook (see docs/IREMBOPAY.md)
+- [x] Console product overviews + resource cards for live services
 
 ### Phase 2 — Polish
-- Audit log viewer, alerting, Loki
-- GraphiQL / gateway mutations via GraphQL (optional)
-- Full GraphQL schema
+- Audit log viewer depth, alerting, Loki
+- GraphiQL IDE in console (optional)
+- Deeper gateway mutations via GraphQL
 
 ### Phase 3 — Broader surface
 - Custom domains, orgs/IAM depth, VPC/security groups
@@ -482,4 +518,4 @@ Vercel: `NEXT_PUBLIC_API_URL` = Netlify URL, no trailing slash. Redeploy after c
 
 ## Status
 
-V1 control plane in **FastAPI** + **Next.js console**. API Gateway, async provisioning, quotas, provider drivers, **secret vaults**, **HTTP/HTTPS/TCP load balancers**, **managed SQL with backups**, **KEDA scale-to-zero**, **IremboPay billing**, and a **Strawberry GraphQL** read API are live. See [docs/architecture.md](docs/architecture.md).
+V1 control plane: **FastAPI** + **Next.js console** + **Cloudlane Terminal**. Live: API Gateway, async provisioning, quotas, secret vaults, **HTTP/HTTPS/TCP LBs**, **managed SQL + backups**, **KEDA scale-to-zero**, **IremboPay**, and **GraphQL** (read + mutations). Local dashboard must use `NEXT_PUBLIC_API_URL=http://localhost:8001` (Python) — legacy Node API lacks these routes. See [docs/architecture.md](docs/architecture.md).
