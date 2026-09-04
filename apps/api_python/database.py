@@ -729,10 +729,68 @@ def write_audit_log(input_data: dict[str, Any]) -> None:
         print(f'audit log write failed: {exc}')
 
 
-def list_audit_logs(tenant_id: str, limit: int = 50) -> list[dict[str, Any]]:
+def list_audit_logs(
+    tenant_id: str,
+    limit: int = 50,
+    resource_type: str | None = None,
+    action: str | None = None,
+    user_id: str | None = None,
+    from_date: datetime | None = None,
+    to_date: datetime | None = None,
+    cursor: str | None = None,
+) -> list[dict[str, Any]]:
     safe_limit = min(max(limit, 1), 200)
-    docs = col('audit_logs').find(tenant_clause(tenant_id)).sort('createdAt', -1).limit(safe_limit)
+    query: dict[str, Any] = tenant_clause(tenant_id)
+    if resource_type:
+        query['resourceType'] = resource_type
+    if action:
+        query['action'] = action
+    if user_id:
+        query['userId'] = oid_or_raw(user_id)
+    if from_date or to_date or cursor:
+        query['createdAt'] = {}
+        if from_date:
+            query['createdAt']['$gte'] = from_date
+        if to_date:
+            query['createdAt']['$lte'] = to_date
+        if cursor:
+            # For backward pagination based on cursor, since sort is DESC
+            try:
+                # Need to find the doc to get its createdAt if we want stable pagination
+                # But a simpler cursor based on _id assuming ObjectId monotonicity works:
+                query['_id'] = {'$lt': as_object_id(cursor)}
+            except Exception:
+                pass
+        if not query['createdAt']:
+            del query['createdAt']
+
+    docs = col('audit_logs').find(query).sort('_id', -1).limit(safe_limit)
     return [map_audit_log(doc) for doc in docs]
+
+
+def count_audit_logs(
+    tenant_id: str,
+    resource_type: str | None = None,
+    action: str | None = None,
+    user_id: str | None = None,
+    from_date: datetime | None = None,
+    to_date: datetime | None = None,
+) -> int:
+    query: dict[str, Any] = tenant_clause(tenant_id)
+    if resource_type:
+        query['resourceType'] = resource_type
+    if action:
+        query['action'] = action
+    if user_id:
+        query['userId'] = oid_or_raw(user_id)
+    if from_date or to_date:
+        query['createdAt'] = {}
+        if from_date:
+            query['createdAt']['$gte'] = from_date
+        if to_date:
+            query['createdAt']['$lte'] = to_date
+
+    return col('audit_logs').count_documents(query)
 
 
 def create_usage_metric(input_data: dict[str, Any]) -> dict[str, Any]:

@@ -7,6 +7,7 @@ import { ConsoleTopBar } from '../../../components/ConsoleTopBar'
 import ConsoleHub from '../../../components/ConsoleHub'
 import { pushRecentService } from '../../../components/recentServices'
 import { useConsoleShell } from '../../../lib/useConsoleShell'
+import AuditLogViewer from '../../../components/AuditLogViewer'
 import ConsoleNav, {
   COMPUTE_VM_TABS,
   GATEWAY_TABS,
@@ -194,13 +195,6 @@ interface QuotaReport {
     databaseInstances: number
     maxInstancesPerDeployment?: number
   }
-}
-
-interface AuditLog {
-  id: string
-  action: string
-  resourceType: string
-  createdAt?: string
 }
 
 function authHeaders(): HeadersInit {
@@ -391,10 +385,6 @@ export default function ConsolePage() {
   const { data: vmsData, mutate: mutateVms } = useSWR(
     showComputeVms ? ['console-vms', projectId] : null,
     () => fetcher<{ vms: Vm[] }>(`/api/vms${projectQuery}`),
-  )
-  const { data: auditData } = useSWR(
-    showSecurity ? 'console-audit' : null,
-    () => fetcher<{ auditLogs: AuditLog[] }>('/api/audit-logs'),
   )
   const { data: gatewaysData, mutate: mutateGateways } = useSWR(
     showGateway || showProductOverview ? ['console-gateways', projectId] : null,
@@ -1611,24 +1601,10 @@ export default function ConsolePage() {
               ))}
             </div>
           )}
-
           {showSecurity && (
-            <div className="gcp-table">
-              <div className="gcp-table-row gcp-table-head cl-table-3">
-                <span>Action</span><span>Resource</span><span>When</span>
-              </div>
-              {(auditData?.auditLogs ?? []).length === 0 && (
-                <div className="gcp-table-row cl-console-empty">No audit events yet.</div>
-              )}
-              {(auditData?.auditLogs ?? []).map((log) => (
-                <div key={log.id} className="gcp-table-row cl-table-3">
-                  <span className="gcp-service">{log.action}</span>
-                  <span className="gcp-muted">{log.resourceType}</span>
-                  <span className="gcp-muted">{log.createdAt ? new Date(log.createdAt).toLocaleString() : '—'}</span>
-                </div>
-              ))}
-            </div>
+            <AuditLogViewer />
           )}
+
 
           {tab === 'solutions' && (
             <div className="cl-gc-stub">
